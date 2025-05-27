@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import redis from '@/lib/redis';
+import { setWithExpiry } from '@/lib/redis';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 
@@ -76,8 +76,8 @@ export async function POST(request: NextRequest) {
         };
 
         // Store image data and binary separately (binary as base64 string)
-        await redis.setex(`image:${imageId}:data`, ttl, JSON.stringify(imageData));
-        await redis.setex(`image:${imageId}:binary`, ttl, processedImage.toString('base64'));
+        await setWithExpiry(`image:${imageId}:data`, JSON.stringify(imageData), ttl);
+        await setWithExpiry(`image:${imageId}:binary`, processedImage.toString('base64'), ttl);
 
         const shareUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/i/${imageId}`;
 
