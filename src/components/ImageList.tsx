@@ -50,7 +50,7 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
     }, [refreshKey]);
 
     const copyUrl = async (imageId: string) => {
-        const url = `${window.location.origin}/i/${imageId}`;
+        const url = `${window.location.origin}/api/i/${imageId}`;
         await navigator.clipboard.writeText(url);
         toast.success('URL copied to clipboard!');
     };
