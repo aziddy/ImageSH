@@ -26,6 +26,10 @@ export async function GET(
         // Convert string back to buffer
         const imageBuffer = Buffer.from(imageBinaryStr, 'base64');
 
+        /*
+            TODO: Probably save image as png or jpeg in the first place
+            TODO: iOS Messenger Previews dont work with webp or webm
+        */
         // Convert image to PNG format using Sharp
         const pngBuffer = await sharp(imageBuffer)
             .png()
