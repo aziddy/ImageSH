@@ -160,7 +160,21 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                                     Select File
                                 </Button>
                                 <Button
-                                    onClick={() => document.execCommand('paste')}
+                                    onClick={async () => {
+                                        try {
+                                            const items = await navigator.clipboard.read();
+                                            for (const item of items) {
+                                                if (item.types.includes('image/png') || item.types.includes('image/jpeg')) {
+                                                    const blob = await item.getType(item.types[0]);
+                                                    const file = new File([blob], 'pasted-image.png', { type: blob.type });
+                                                    handleFile(file);
+                                                    break;
+                                                }
+                                            }
+                                        } catch (error) {
+                                            toast.error('Failed to paste image');
+                                        }
+                                    }}
                                     variant="outline"
                                 >
                                     <Clipboard className="h-4 w-4 mr-2" />
