@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import redis from '@/lib/redis';
+import sharp from 'sharp';
 
 export async function GET(
     request: NextRequest,
@@ -25,12 +26,17 @@ export async function GET(
         // Convert string back to buffer
         const imageBuffer = Buffer.from(imageBinaryStr, 'base64');
 
+        // Convert image to PNG format using Sharp
+        const pngBuffer = await sharp(imageBuffer)
+            .png()
+            .toBuffer();
+
         // Return image with appropriate headers
-        return new NextResponse(imageBuffer, {
+        return new NextResponse(pngBuffer, {
             headers: {
-                'Content-Type': imageData.mimeType || 'image/webp',
+                'Content-Type': 'image/png',
                 'Cache-Control': 'public, max-age=3600',
-                'Content-Disposition': `inline; filename="${imageData.originalName}"`,
+                'Content-Disposition': `inline; filename="${imageData.originalName}.png"`,
             },
         });
     } catch (error) {
