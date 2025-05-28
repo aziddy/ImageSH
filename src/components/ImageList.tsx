@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Copy, ExternalLink, Clock } from 'lucide-react';
+import { Trash2, Copy, ExternalLink, Clock, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -13,6 +13,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useRouter } from 'next/navigation';
 
 interface ImageData {
     id: string;
@@ -32,6 +33,7 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
         imageId: string | null;
         imageName: string | null;
     }>({ open: false, imageId: null, imageName: null });
+    const router = useRouter();
 
     const fetchImages = async () => {
         try {
@@ -57,6 +59,10 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
 
     const openImage = (imageId: string) => {
         window.open(`/api/i/${imageId}`, '_blank');
+    };
+
+    const openQRCode = (imageId: string) => {
+        router.push(`/qr/${imageId}`);
     };
 
     const deleteImage = async () => {
@@ -160,6 +166,13 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
                                             onClick={() => openImage(image.id)}
                                         >
                                             <ExternalLink className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openQRCode(image.id)}
+                                        >
+                                            <QrCode className="h-4 w-4" />
                                         </Button>
                                         <Button
                                             size="sm"
