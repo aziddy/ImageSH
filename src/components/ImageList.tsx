@@ -56,7 +56,7 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
     };
 
     const openImage = (imageId: string) => {
-        window.open(`/i/${imageId}`, '_blank');
+        window.open(`/api/i/${imageId}`, '_blank');
     };
 
     const deleteImage = async () => {
