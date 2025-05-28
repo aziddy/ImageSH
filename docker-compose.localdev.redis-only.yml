@@ -5,9 +5,10 @@ services:
     image: redis:7.2-alpine
     ports:
       - "6384:6379"
+      # 6384 external port for the redis server
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --requirepass your_secure_redis_password_here --appendonly yes
     restart: unless-stopped
 
 volumes:

@@ -1,0 +1,33 @@
+version: '3.8'
+
+# IDK IF IT WORKS YET
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=your_secure_redis_password_here
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=your_secure_password_here
+      - NEXTAUTH_SECRET=your_nextauth_secret_here
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXT_PUBLIC_MAX_FILE_SIZE=10485760
+    depends_on:
+      - redis
+    env_file:
+      - .env.local
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6384:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --requirepass your_secure_redis_password_here --appendonly yes
+
+volumes:
+  redis-data:

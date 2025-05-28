@@ -5,7 +5,7 @@ import redis from '@/lib/redis';
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: { id: string } }
 ) {
     try {
         // Check authentication
@@ -14,7 +14,7 @@ export async function DELETE(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const imageId = params.id;
+        const imageId = context.params.id;
 
         // Delete both data and binary
         const dataDeleted = await redis.del(`image:${imageId}:data`);
