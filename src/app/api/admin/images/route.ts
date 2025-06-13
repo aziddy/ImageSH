@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import redis from '@/lib/redis';
+import getRedis from '@/lib/redis';
 
 export async function GET() {
     try {
@@ -10,6 +10,9 @@ export async function GET() {
         if (!session) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        // Get Redis client
+        const redis = await getRedis();
 
         // Get all image keys
         const keys = await redis.keys('image:*:data');

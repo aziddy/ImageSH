@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import redis from '@/lib/redis';
+import getRedis from '@/lib/redis';
 import sharp from 'sharp';
 
 export async function GET(
@@ -8,6 +8,9 @@ export async function GET(
 ) {
     try {
         const imageId = params.id;
+
+        // Get Redis client
+        const redis = await getRedis();
 
         // Get image metadata first to check if it exists
         const imageDataStr = await redis.get(`image:${imageId}:data`);

@@ -50,4 +50,7 @@ export const setWithExpiry = async (key: string, value: string, ttl: number) => 
 	await client.set(key, value, { EX: ttl });
 };
 
-export default getRedisClient(); 
+// Export a function that ensures connection
+export default async function getRedis() {
+	return await connectRedis();
+} 
