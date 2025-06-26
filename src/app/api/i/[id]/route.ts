@@ -4,10 +4,10 @@ import sharp from 'sharp';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const imageId = params.id;
+        const { id: imageId } = await params;
 
         // Get Redis client
         const redis = await getRedis();
@@ -43,7 +43,7 @@ export async function GET(
             headers: {
                 'Content-Type': 'image/png',
                 'Cache-Control': 'public, max-age=3600',
-                'Content-Disposition': `inline; filename="${imageData.originalName}.png"`,
+                'Content-Disposition': `inline; filename="${imageData.displayName || imageData.originalName}.png"`,
             },
         });
     } catch (error) {

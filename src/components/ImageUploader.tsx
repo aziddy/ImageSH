@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Upload, Clipboard, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,6 +22,7 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [expiration, setExpiration] = useState('1d');
     const [preview, setPreview] = useState<string | null>(null);
+    const [customName, setCustomName] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFile = useCallback((file: File) => {
@@ -37,6 +39,10 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         }
 
         setSelectedFile(file);
+
+        // Set default custom name to filename without extension
+        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+        setCustomName(nameWithoutExt);
 
         // Create preview
         const reader = new FileReader();
@@ -93,6 +99,9 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('expiration', expiration);
+        if (customName.trim()) {
+            formData.append('name', customName.trim());
+        }
 
         try {
             const response = await fetch('/api/admin/upload', {
@@ -113,6 +122,7 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                 setSelectedFile(null);
                 setPreview(null);
                 setExpiration('1d');
+                setCustomName('');
 
                 // Notify parent to refresh list
                 onUploadSuccess();
@@ -129,6 +139,7 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
     const clearSelection = () => {
         setSelectedFile(null);
         setPreview(null);
+        setCustomName('');
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -171,7 +182,7 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                                                     break;
                                                 }
                                             }
-                                        } catch (error) {
+                                        } catch {
                                             toast.error('Failed to paste image');
                                         }
                                     }}
@@ -207,25 +218,40 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                                 </button>
                             </div>
                             <p className="text-sm text-gray-600">{selectedFile.name}</p>
-                            <div className="flex items-center gap-4 justify-center">
-                                <Select value={expiration} onValueChange={setExpiration}>
-                                    <SelectTrigger className="w-48">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="2h">2 hours</SelectItem>
-                                        <SelectItem value="1d">1 day</SelectItem>
-                                        <SelectItem value="3d">3 days</SelectItem>
-                                        <SelectItem value="7d">7 days</SelectItem>
-                                        <SelectItem value="1m">1 month</SelectItem>
-                                        <SelectItem value="3m">3 months</SelectItem>
-                                        <SelectItem value="6m">6 months</SelectItem>
-                                        <SelectItem value="1y">1 year</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Button onClick={handleUpload} disabled={isUploading}>
-                                    {isUploading ? 'Uploading...' : 'Upload'}
-                                </Button>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center gap-2">
+                                    <label htmlFor="custom-name" className="text-sm font-medium text-gray-700">
+                                        Name:
+                                    </label>
+                                    <Input
+                                        id="custom-name"
+                                        type="text"
+                                        value={customName}
+                                        onChange={(e) => setCustomName(e.target.value)}
+                                        placeholder="Enter a custom name for this image"
+                                        className="flex-1"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-4 justify-center">
+                                    <Select value={expiration} onValueChange={setExpiration}>
+                                        <SelectTrigger className="w-48">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="2h">2 hours</SelectItem>
+                                            <SelectItem value="1d">1 day</SelectItem>
+                                            <SelectItem value="3d">3 days</SelectItem>
+                                            <SelectItem value="7d">7 days</SelectItem>
+                                            <SelectItem value="1m">1 month</SelectItem>
+                                            <SelectItem value="3m">3 months</SelectItem>
+                                            <SelectItem value="6m">6 months</SelectItem>
+                                            <SelectItem value="1y">1 year</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Button onClick={handleUpload} disabled={isUploading}>
+                                        {isUploading ? 'Uploading...' : 'Upload'}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     )}

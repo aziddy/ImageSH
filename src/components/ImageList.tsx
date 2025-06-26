@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Copy, ExternalLink, Clock, QrCode } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, Copy, ExternalLink, Clock, QrCode, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import {
     Dialog,
@@ -18,6 +19,8 @@ import { useRouter } from 'next/navigation';
 interface ImageData {
     id: string;
     originalName: string;
+    customName?: string | null;
+    displayName: string;
     mimeType: string;
     size: number;
     uploadedAt: string;
@@ -33,6 +36,12 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
         imageId: string | null;
         imageName: string | null;
     }>({ open: false, imageId: null, imageName: null });
+    const [editDialog, setEditDialog] = useState<{
+        open: boolean;
+        imageId: string | null;
+        imageName: string | null;
+        newName: string;
+    }>({ open: false, imageId: null, imageName: null, newName: '' });
     const router = useRouter();
 
     const fetchImages = async () => {
@@ -52,13 +61,13 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
     }, [refreshKey]);
 
     const copyUrl = async (imageId: string) => {
-        const url = `${window.location.origin}/api/i/${imageId}`;
+        const url = `${window.location.origin}/i/${imageId}`;
         await navigator.clipboard.writeText(url);
         toast.success('URL copied to clipboard!');
     };
 
     const openImage = (imageId: string) => {
-        window.open(`/api/i/${imageId}`, '_blank');
+        window.open(`/i/${imageId}`, '_blank');
     };
 
     const openQRCode = (imageId: string) => {
@@ -83,6 +92,32 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
             toast.error('Failed to delete image');
         } finally {
             setDeleteDialog({ open: false, imageId: null, imageName: null });
+        }
+    };
+
+    const updateImageName = async () => {
+        if (!editDialog.imageId || !editDialog.newName.trim()) return;
+
+        try {
+            const response = await fetch(`/api/admin/images/${editDialog.imageId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name: editDialog.newName.trim() }),
+            });
+
+            if (response.ok) {
+                toast.success('Image name updated successfully');
+                fetchImages();
+            } else {
+                const data = await response.json();
+                toast.error(data.error || 'Failed to update image name');
+            }
+        } catch {
+            toast.error('Failed to update image name');
+        } finally {
+            setEditDialog({ open: false, imageId: null, imageName: null, newName: '' });
         }
     };
 
@@ -142,7 +177,7 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
                                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
                                 >
                                     <div className="flex-1">
-                                        <p className="font-medium">{image.originalName}</p>
+                                        <p className="font-medium">{image.displayName}</p>
                                         <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                             <span>{formatFileSize(image.size)}</span>
                                             <span>Uploaded {formatDate(image.uploadedAt)}</span>
@@ -177,12 +212,26 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
                                         <Button
                                             size="sm"
                                             variant="outline"
+                                            onClick={() =>
+                                                setEditDialog({
+                                                    open: true,
+                                                    imageId: image.id,
+                                                    imageName: image.displayName,
+                                                    newName: image.displayName,
+                                                })
+                                            }
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
                                             className="text-red-600 hover:text-red-700"
                                             onClick={() =>
                                                 setDeleteDialog({
                                                     open: true,
                                                     imageId: image.id,
-                                                    imageName: image.originalName,
+                                                    imageName: image.displayName,
                                                 })
                                             }
                                         >
@@ -221,6 +270,49 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
                         </Button>
                         <Button variant="destructive" onClick={deleteImage}>
                             Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={editDialog.open}
+                onOpenChange={(open) =>
+                    setEditDialog({ open, imageId: null, imageName: null, newName: '' })
+                }
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Image Name</DialogTitle>
+                        <DialogDescription>
+                            Update the name for &quot;{editDialog.imageName}&quot;
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            type="text"
+                            value={editDialog.newName}
+                            onChange={(e) =>
+                                setEditDialog(prev => ({ ...prev, newName: e.target.value }))
+                            }
+                            placeholder="Enter new name"
+                            className="w-full"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() =>
+                                setEditDialog({ open: false, imageId: null, imageName: null, newName: '' })
+                            }
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={updateImageName}
+                            disabled={!editDialog.newName.trim()}
+                        >
+                            Update Name
                         </Button>
                     </DialogFooter>
                 </DialogContent>

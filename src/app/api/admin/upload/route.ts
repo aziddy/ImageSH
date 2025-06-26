@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
         const expiration = formData.get('expiration') as string;
+        const customName = formData.get('name') as string | null;
 
         if (!file) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
         const imageData = {
             id: imageId,
             originalName: file.name,
+            customName: customName || null,
+            displayName: customName || file.name,
             mimeType: 'image/webp',
             size: file.size * 2, // TODO: bad, but close enough
             uploadedAt: new Date().toISOString(),
