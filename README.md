@@ -3,7 +3,6 @@
 A modern, secure image sharing application built with Next.js, Shadcn UI, and Redis. Features single-user authentication, drag-and-drop uploads, and automatic expiration.
 
 ## Features
-
 - 🔒 **Single Admin User** - Secure login using environment variables
 - 📤 **Multiple Upload Methods**:
   - Drag and drop files
