@@ -132,35 +132,6 @@ Share the generated URLs with anyone. Images are publicly accessible via their u
 - Images stored with TTL in Redis
 - Automatic cleanup on expiration
 
-## Docker Support
-
-Create a `docker-compose.yml` for easy setup:
-
-```yaml
-version: '3.8'
-
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - REDIS_URL=redis://redis:6384
-    depends_on:
-      - redis
-    env_file:
-      - .env.local
-
-  redis:
-    image: redis:alpine
-    ports:
-      - "6384:6379"
-    volumes:
-      - redis-data:/data
-
-volumes:
-  redis-data:
-```
 
 ## Troubleshooting
 
@@ -187,7 +158,3 @@ Check:
 - Verify environment variables are set correctly
 - Check NextAuth secret is properly configured
 - Ensure cookies are enabled in your browser
-
-## License
-
-MIT
