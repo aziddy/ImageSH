@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
 
         // Process image with sharp (optimize and convert to webp for storage)
         const processedImage = await sharp(buffer)
+            .rotate() // Auto-rotate based on EXIF orientation data
             .webp({ quality: 80 })
             .toBuffer();
 
