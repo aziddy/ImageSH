@@ -109,14 +109,33 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                 body: formData,
             });
 
+            if (!response.ok) {
+                // Handle HTTP error status
+                let errorMessage = 'Upload failed';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                } catch {
+                    // If JSON parsing fails, use status text
+                    errorMessage = `Upload failed (${response.status})`;
+                }
+                toast.error(errorMessage);
+                return;
+            }
+
             const data: UploadResponse = await response.json();
 
             if (data.success && data.shareUrl) {
                 toast.success('Image uploaded successfully!');
 
                 // Copy share URL to clipboard
-                await navigator.clipboard.writeText(data.shareUrl);
-                toast.success('Share URL copied to clipboard!');
+                try {
+                    await navigator.clipboard.writeText(data.shareUrl);
+                    toast.success('Share URL copied to clipboard!');
+                } catch {
+                    // Clipboard access might fail on some iOS browsers
+                    toast.info('Image uploaded! (Could not copy URL to clipboard)');
+                }
 
                 // Reset form
                 setSelectedFile(null);
@@ -129,8 +148,9 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
             } else {
                 toast.error(data.error || 'Upload failed');
             }
-        } catch {
-            toast.error('Upload failed. Please try again.');
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast.error('Upload failed. Please check your connection and try again.');
         } finally {
             setIsUploading(false);
         }
