@@ -50,6 +50,36 @@ export const setWithExpiry = async (key: string, value: string, ttl: number) => 
 	await client.set(key, value, { EX: ttl });
 };
 
+// Helper function to set binary data with expiration
+export const setBufferWithExpiry = async (key: string, buffer: Buffer, ttl: number) => {
+	const client = await connectRedis();
+	// Store as base64 but mark it with a special prefix to differentiate from old format
+	const base64Data = `BINARY:${buffer.toString('base64')}`;
+	await client.set(key, base64Data, { EX: ttl });
+};
+
+// Helper function to get binary data
+export const getBuffer = async (key: string): Promise<Buffer | null> => {
+	const client = await connectRedis();
+	const result = await client.get(key);
+	if (!result) return null;
+	
+	if (typeof result === 'string') {
+		// Check if it's new format with BINARY: prefix
+		if (result.startsWith('BINARY:')) {
+			// New format: remove prefix and decode base64
+			const base64Data = result.substring(7);
+			return Buffer.from(base64Data, 'base64');
+		} else {
+			// Old format: direct base64 string
+			return Buffer.from(result, 'base64');
+		}
+	}
+	
+	// If result is already a buffer (unlikely with Redis client), return it
+	return result as Buffer;
+};
+
 // Export a function that ensures connection
 export default async function getRedis() {
 	return await connectRedis();
