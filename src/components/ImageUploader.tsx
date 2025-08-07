@@ -96,6 +96,13 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         if (!selectedFile) return;
 
         setIsUploading(true);
+        
+        // Show immediate progress feedback
+        toast.info('Uploading image...', {
+            duration: Infinity, // Keep showing until we dismiss it
+            id: 'upload-progress'
+        });
+        
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('expiration', expiration);
@@ -119,6 +126,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                     // If JSON parsing fails, use status text
                     errorMessage = `Upload failed (${response.status})`;
                 }
+                // Dismiss progress toast before showing error
+                toast.dismiss('upload-progress');
                 toast.error(errorMessage);
                 return;
             }
@@ -126,6 +135,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
             const data: UploadResponse = await response.json();
 
             if (data.success && data.shareUrl) {
+                // Dismiss progress toast
+                toast.dismiss('upload-progress');
                 toast.success('Image uploaded successfully!');
 
                 // Copy share URL to clipboard
@@ -146,10 +157,14 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                 // Notify parent to refresh list
                 onUploadSuccess();
             } else {
+                // Dismiss progress toast before showing error
+                toast.dismiss('upload-progress');
                 toast.error(data.error || 'Upload failed');
             }
         } catch (error) {
             console.error('Upload error:', error);
+            // Dismiss progress toast before showing error
+            toast.dismiss('upload-progress');
             toast.error('Upload failed. Please check your connection and try again.');
         } finally {
             setIsUploading(false);
