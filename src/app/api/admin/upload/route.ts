@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { setWithExpiry } from '@/lib/redis';
+import { setWithExpiry, setBufferWithExpiry } from '@/lib/redis';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 
@@ -46,10 +46,11 @@ export async function POST(request: NextRequest) {
         // Read file buffer
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        // Process image with sharp (optimize and convert to webp for storage)
+        // Process image with sharp (optimize and convert to PNG for storage)
+        // PNG format chosen for better iOS compatibility and to avoid conversion on serving
         const processedImage = await sharp(buffer)
             .rotate() // Auto-rotate based on EXIF orientation data
-            .webp({ quality: 80 })
+            .png({ quality: 80 })
             .toBuffer();
 
         // Calculate TTL
@@ -72,16 +73,16 @@ export async function POST(request: NextRequest) {
             originalName: file.name,
             customName: customName || null,
             displayName: customName || file.name,
-            mimeType: 'image/webp',
+            mimeType: 'image/png',
             size: file.size * 2, // TODO: bad, but close enough
             uploadedAt: new Date().toISOString(),
             uploadedBy: session.user.name,
             expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
         };
 
-        // Store image data and binary separately (binary as base64 string)
+        // Store image data and binary separately (binary as raw buffer for efficiency)
         await setWithExpiry(`image:${imageId}:data`, JSON.stringify(imageData), ttl);
-        await setWithExpiry(`image:${imageId}:binary`, processedImage.toString('base64'), ttl);
+        await setBufferWithExpiry(`image:${imageId}:binary`, processedImage, ttl);
 
         const shareUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/i/${imageId}`;
 
