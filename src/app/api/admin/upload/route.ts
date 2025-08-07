@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
             customName: customName || null,
             displayName: customName || file.name,
             mimeType: 'image/png',
-            size: file.size * 2, // TODO: bad, but close enough
+            size: file.size,
             uploadedAt: new Date().toISOString(),
             uploadedBy: session.user.name,
             expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
