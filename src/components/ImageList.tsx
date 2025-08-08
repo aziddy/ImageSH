@@ -174,20 +174,21 @@ export default function ImageList({ refreshKey }: { refreshKey: number }) {
                             {images.map((image) => (
                                 <div
                                     key={image.id}
-                                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-gray-50 gap-3"
                                 >
-                                    <div className="flex-1">
-                                        <p className="font-medium">{image.displayName}</p>
-                                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">{image.displayName}</p>
+                                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500 mt-1">
                                             <span>{formatFileSize(image.size)}</span>
-                                            <span>Uploaded {formatDate(image.uploadedAt)}</span>
+                                            <span className="hidden sm:inline">Uploaded {formatDate(image.uploadedAt)}</span>
+                                            <span className="sm:hidden">Uploaded</span>
                                             <span className="flex items-center gap-1">
                                                 <Clock className="h-3 w-3" />
                                                 {getTimeRemaining(image.expiresAt)}
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-shrink-0">
                                         <Button
                                             size="sm"
                                             variant="outline"
