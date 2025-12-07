@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Upload, Clipboard, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { ImageSizeReducer } from '@/components/ui/imageSizeReducer';
 
 interface UploadResponse {
     success: boolean;
@@ -20,6 +21,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
     const [isUploading, setIsUploading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [resizedFile, setResizedFile] = useState<File | null>(null);
+    const [resizePercentage, setResizePercentage] = useState(100);
     const [expiration, setExpiration] = useState('1d');
     const [preview, setPreview] = useState<string | null>(null);
     const [customName, setCustomName] = useState('');
@@ -39,6 +42,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         }
 
         setSelectedFile(file);
+        setResizedFile(null); // Reset resized file when new file is selected
+        setResizePercentage(100); // Reset percentage
 
         // Set default custom name to filename without extension
         const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
@@ -92,8 +97,38 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         }
     }, [handleFile]);
 
+    const handleResizedFile = useCallback((file: File | null, percentage: number) => {
+        setResizedFile(file);
+        setResizePercentage(percentage);
+        // Update preview with resized image to show pixelation, but keep container size fixed
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        } else if (selectedFile) {
+            // If no resized file, show original
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(selectedFile);
+        }
+    }, [selectedFile]);
+
     const handleUpload = async () => {
         if (!selectedFile) return;
+
+        // Use resized file if available, otherwise use original
+        const fileToUpload = resizedFile || selectedFile;
+
+        // Validate resized file size
+        const maxSize = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760');
+        if (fileToUpload.size > maxSize) {
+            toast.error(`File size exceeds ${maxSize / 1024 / 1024}MB limit`);
+            return;
+        }
 
         setIsUploading(true);
         
@@ -104,7 +139,7 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
         });
         
         const formData = new FormData();
-        formData.append('file', selectedFile);
+        formData.append('file', fileToUpload);
         formData.append('expiration', expiration);
         if (customName.trim()) {
             formData.append('name', customName.trim());
@@ -150,6 +185,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
 
                 // Reset form
                 setSelectedFile(null);
+                setResizedFile(null);
+                setResizePercentage(100);
                 setPreview(null);
                 setExpiration('1d');
                 setCustomName('');
@@ -173,6 +210,8 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
 
     const clearSelection = () => {
         setSelectedFile(null);
+        setResizedFile(null);
+        setResizePercentage(100);
         setPreview(null);
         setCustomName('');
         if (fileInputRef.current) {
@@ -237,23 +276,33 @@ export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: ()
                         </>
                     ) : (
                         <div className="space-y-4">
-                            <div className="relative inline-block">
-                                {preview && (
-                                    <img
-                                        src={preview}
-                                        alt="Preview"
-                                        className="max-h-64 max-w-full rounded"
-                                    />
-                                )}
+                            <div className="relative inline-block w-full">
+                                <div className="w-full h-64 flex items-center justify-center bg-gray-50 rounded border border-gray-200 overflow-hidden">
+                                    {preview && (
+                                        <img
+                                            src={preview}
+                                            alt="Preview"
+                                            className="rounded"
+                                            style={{ 
+                                                imageRendering: resizePercentage < 100 ? 'pixelated' : 'auto',
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'contain',
+                                                display: 'block'
+                                            }}
+                                        />
+                                    )}
+                                </div>
                                 <button
                                     onClick={clearSelection}
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors z-10"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
                             <p className="text-sm text-gray-600">{selectedFile.name}</p>
                             <div className="flex flex-col gap-4">
+                                <ImageSizeReducer file={selectedFile} onResizedFile={handleResizedFile} />
                                 <div className="flex items-center gap-2">
                                     <label htmlFor="custom-name" className="text-sm font-medium text-gray-700">
                                         Name:

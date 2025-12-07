@@ -1,0 +1,20 @@
+{
+    "ImagesMetaData": [
+        {
+            "imageFileName": "1.png",
+            "imageSizeInKB": 680,
+            "imageSizeInMB": 0.68,
+            "imageType": "image/png",
+            "width": 1000,
+            "height": 650
+        },
+        {
+            "imageFileName": "2.png",
+            "imageSizeInKB": 3200,
+            "imageSizeInMB": 3.2,
+            "imageType": "image/png",
+            "width": 2402,
+            "height": 1352
+        }
+    ]
+}
