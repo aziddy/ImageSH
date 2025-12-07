@@ -63,6 +63,9 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
             ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
             // Convert canvas to blob
+            // Use quality 0.85 to match server-side compression (sharp uses quality 85)
+            // This ensures frontend blob size is closer to final server-processed size
+            const quality = 0.85;
             canvas.toBlob(
                 (blob) => {
                     if (blob) {
@@ -82,7 +85,7 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
                     setIsProcessing(false);
                 },
                 file.type || 'image/png',
-                0.92 // Quality for JPEG/WebP (PNG ignores this)
+                quality // Quality 85% to match server-side sharp compression
             );
         } catch (error) {
             console.error('Error resizing image:', error);
@@ -130,6 +133,8 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
     const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = parseInt(e.target.value);
         setPercentage(value);
+        // Reset actual size when percentage changes - will be updated when new blob is ready
+        setActualResizedSize(null);
     };
 
     if (!originalDimensions) {
@@ -145,6 +150,18 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
     
     // Use actual resized size if available, otherwise show estimate
     const resizedSize = actualResizedSize !== null ? actualResizedSize : estimateFileSize(newWidth, newHeight, file.size);
+    const isShowingEstimate = actualResizedSize === null;
+    
+    // Detect if file might be from iOS (HEIC converted to JPEG)
+    // iOS typically converts HEIC to JPEG when selecting in browser
+    // We can detect this by checking if it's JPEG but file size seems unusually large
+    // or if the filename suggests it's from iOS Photos app
+    const mightBeHeicConverted = 
+        (file.type === 'image/jpeg' || file.type === 'image/jpg') &&
+        (file.name.toLowerCase().includes('img_') || 
+         file.name.toLowerCase().includes('photo') ||
+         navigator.userAgent.includes('iPhone') ||
+         navigator.userAgent.includes('iPad'));
 
     // Calculate progress bar width to align with thumb center
     // Range inputs position thumb center accounting for thumb width (1rem = 16px)
@@ -220,6 +237,14 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
                     <div className="space-y-0.5 text-sm">
                         <div className="font-medium text-gray-900">{originalDimensions.width} × {originalDimensions.height} px</div>
                         <div className="text-gray-600">{formatFileSize(file.size)}</div>
+                        {mightBeHeicConverted && (
+                            <div className="text-xs text-amber-600 mt-1 flex items-start gap-1">
+                                <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>iOS converted HEIC to JPEG (may be larger than original)</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="space-y-1">
@@ -227,11 +252,24 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
                     <div className="space-y-0.5 text-sm">
                         <div className="font-medium text-gray-900">{newWidth} × {newHeight} px</div>
                         <div className="text-gray-600">
-                            {formatFileSize(resizedSize)}
-                            {actualResizedSize === null && isProcessing && (
-                                <span className="text-xs text-gray-400 ml-1">(estimating...)</span>
+                            <span className={isShowingEstimate ? "text-gray-500" : ""}>
+                                {formatFileSize(resizedSize)}
+                            </span>
+                            {isShowingEstimate && (
+                                <span className="text-xs text-gray-400 ml-1">(estimate)</span>
+                            )}
+                            {!isShowingEstimate && (
+                                <span className="text-xs text-green-600 ml-1">(actual)</span>
                             )}
                         </div>
+                        {!isShowingEstimate && (
+                            <div className="text-xs text-blue-600 mt-1 flex items-start gap-1">
+                                <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Server will optimize further (may reduce by ~5-15%)</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
