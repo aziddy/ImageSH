@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import getRedis, { getBuffer } from '@/lib/redis';
-import sharp from 'sharp';
 
 export async function GET(
     request: NextRequest,
@@ -26,28 +25,17 @@ export async function GET(
             return NextResponse.json({ error: 'Image binary not found' }, { status: 404 });
         }
 
-        // Check if image is already PNG (new format) or needs conversion (old WebP format)
-        let finalBuffer: Buffer;
-        let contentType: string;
-        
-        if (imageData.mimeType === 'image/png') {
-            // New format: already PNG, serve directly
-            finalBuffer = imageBuffer;
-            contentType = 'image/png';
-        } else {
-            // Old format: WebP stored as base64, convert to PNG
-            finalBuffer = await sharp(imageBuffer)
-                .png()
-                .toBuffer();
-            contentType = 'image/png';
-        }
+        // Serve image in its stored format (no conversion needed)
+        // Images are now stored in their original format for better compression
+        const contentType = imageData.mimeType || 'image/png';
+        const fileExtension = contentType.split('/')[1] || 'png';
 
         // Return image with appropriate headers
-        return new NextResponse(finalBuffer, {
+        return new Response(imageBuffer, {
             headers: {
                 'Content-Type': contentType,
                 'Cache-Control': 'public, max-age=3600',
-                'Content-Disposition': `inline; filename="${imageData.displayName || imageData.originalName}.png"`,
+                'Content-Disposition': `inline; filename="${imageData.displayName || imageData.originalName}.${fileExtension}"`,
             },
         });
     } catch (error) {

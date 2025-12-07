@@ -18,6 +18,7 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
     const [percentage, setPercentage] = useState(100);
     const [originalDimensions, setOriginalDimensions] = useState<ImageDimensions | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [actualResizedSize, setActualResizedSize] = useState<number | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
     const sliderRef = useRef<HTMLInputElement>(null);
@@ -65,6 +66,9 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
             canvas.toBlob(
                 (blob) => {
                     if (blob) {
+                        // Store the actual blob size
+                        setActualResizedSize(blob.size);
+                        
                         // Create a new File from the blob
                         const resizedFile = new File([blob], file.name, {
                             type: file.type,
@@ -72,6 +76,7 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
                         });
                         onResizedFile(resizedFile, scalePercent);
                     } else {
+                        setActualResizedSize(null);
                         onResizedFile(null, scalePercent);
                     }
                     setIsProcessing(false);
@@ -137,7 +142,9 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
 
     const newWidth = Math.round((originalDimensions.width * percentage) / 100);
     const newHeight = Math.round((originalDimensions.height * percentage) / 100);
-    const estimatedSize = estimateFileSize(newWidth, newHeight, file.size);
+    
+    // Use actual resized size if available, otherwise show estimate
+    const resizedSize = actualResizedSize !== null ? actualResizedSize : estimateFileSize(newWidth, newHeight, file.size);
 
     // Calculate progress bar width to align with thumb center
     // Range inputs position thumb center accounting for thumb width (1rem = 16px)
@@ -219,7 +226,12 @@ export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps)
                     <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resized</div>
                     <div className="space-y-0.5 text-sm">
                         <div className="font-medium text-gray-900">{newWidth} × {newHeight} px</div>
-                        <div className="text-gray-600">{formatFileSize(estimatedSize)}</div>
+                        <div className="text-gray-600">
+                            {formatFileSize(resizedSize)}
+                            {actualResizedSize === null && isProcessing && (
+                                <span className="text-xs text-gray-400 ml-1">(estimating...)</span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

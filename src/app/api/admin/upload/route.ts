@@ -46,12 +46,38 @@ export async function POST(request: NextRequest) {
         // Read file buffer
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        // Process image with sharp (optimize and convert to PNG for storage)
-        // PNG format chosen for better iOS compatibility and to avoid conversion on serving
-        const processedImage = await sharp(buffer)
-            .rotate() // Auto-rotate based on EXIF orientation data
-            .png({ quality: 80 })
-            .toBuffer();
+        // Process image with sharp - preserve original format for better compression
+        // Auto-rotate based on EXIF orientation data
+        let processedImage: Buffer;
+        let finalMimeType: string;
+        
+        const sharpInstance = sharp(buffer).rotate();
+        
+        // Preserve original format to maintain compression
+        // JPEG/WebP are better for photos, PNG for graphics/transparency
+        if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+            processedImage = await sharpInstance
+                .jpeg({ quality: 85, mozjpeg: true })
+                .toBuffer();
+            finalMimeType = 'image/jpeg';
+        } else if (file.type === 'image/webp') {
+            processedImage = await sharpInstance
+                .webp({ quality: 85 })
+                .toBuffer();
+            finalMimeType = 'image/webp';
+        } else if (file.type === 'image/png') {
+            // PNG compression level 6-9 (6 is faster, 9 is smaller)
+            processedImage = await sharpInstance
+                .png({ compressionLevel: 9, adaptiveFiltering: true })
+                .toBuffer();
+            finalMimeType = 'image/png';
+        } else {
+            // GIF or other - convert to PNG
+            processedImage = await sharpInstance
+                .png({ compressionLevel: 9 })
+                .toBuffer();
+            finalMimeType = 'image/png';
+        }
 
         // Calculate TTL
         const ttlMap: { [key: string]: number } = {
@@ -68,13 +94,14 @@ export async function POST(request: NextRequest) {
         const ttl = ttlMap[expiration] || ttlMap['1d'];
 
         // Store in Redis
+        // Use actual processed image size, not original uploaded size
         const imageData = {
             id: imageId,
             originalName: file.name,
             customName: customName || null,
             displayName: customName || file.name,
-            mimeType: 'image/png',
-            size: file.size,
+            mimeType: finalMimeType,
+            size: processedImage.length, // Actual stored size after processing
             uploadedAt: new Date().toISOString(),
             uploadedBy: session.user.name,
             expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
