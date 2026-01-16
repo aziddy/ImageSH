@@ -17,7 +17,19 @@ export async function GET(
             return NextResponse.json({ error: 'Image not found' }, { status: 404 });
         }
 
-        const imageData = JSON.parse(imageDataStr);
+        let imageData;
+        try {
+            imageData = JSON.parse(imageDataStr);
+        } catch (parseError) {
+            console.error('Failed to parse image data:', parseError);
+            return NextResponse.json({ error: 'Invalid image data format' }, { status: 500 });
+        }
+
+        // Validate parsed data structure
+        if (!imageData || typeof imageData !== 'object') {
+            console.error('Invalid image data structure:', imageData);
+            return NextResponse.json({ error: 'Invalid image data structure' }, { status: 500 });
+        }
 
         // Get image binary data using backward-compatible helper
         const imageBuffer = await getBuffer(`image:${imageId}:binary`);
@@ -29,13 +41,15 @@ export async function GET(
         // Images are now stored in their original format for better compression
         const contentType = imageData.mimeType || 'image/png';
         const fileExtension = contentType.split('/')[1] || 'png';
+        const displayName = imageData.displayName || imageData.originalName || 'image';
+        const filename = `${displayName}.${fileExtension}`;
 
         // Return image with appropriate headers
         return new Response(imageBuffer, {
             headers: {
                 'Content-Type': contentType,
                 'Cache-Control': 'public, max-age=3600',
-                'Content-Disposition': `inline; filename="${imageData.displayName || imageData.originalName}.${fileExtension}"`,
+                'Content-Disposition': `inline; filename="${filename}"`,
             },
         });
     } catch (error) {

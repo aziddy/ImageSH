@@ -30,7 +30,19 @@ export async function PATCH(
             return NextResponse.json({ error: 'Image not found' }, { status: 404 });
         }
 
-        const imageData = JSON.parse(imageDataStr);
+        let imageData;
+        try {
+            imageData = JSON.parse(imageDataStr);
+        } catch (parseError) {
+            console.error('Failed to parse image data:', parseError);
+            return NextResponse.json({ error: 'Invalid image data format' }, { status: 500 });
+        }
+
+        // Validate parsed data structure
+        if (!imageData || typeof imageData !== 'object') {
+            console.error('Invalid image data structure:', imageData);
+            return NextResponse.json({ error: 'Invalid image data structure' }, { status: 500 });
+        }
 
         // Update the name fields
         imageData.customName = name.trim();

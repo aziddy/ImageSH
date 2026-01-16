@@ -22,14 +22,27 @@ export async function GET() {
         for (const key of keys) {
             const data = await redis.get(key);
             if (data) {
-                images.push(JSON.parse(data));
+                try {
+                    const parsedData = JSON.parse(data);
+                    // Validate parsed data structure
+                    if (parsedData && typeof parsedData === 'object' && parsedData.id) {
+                        images.push(parsedData);
+                    } else {
+                        console.warn(`Invalid image data structure for key ${key}:`, parsedData);
+                    }
+                } catch (parseError) {
+                    console.error(`Failed to parse image data for key ${key}:`, parseError);
+                    // Continue processing other images even if one fails
+                }
             }
         }
 
         // Sort by upload date (newest first)
-        images.sort((a, b) =>
-            new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-        );
+        images.sort((a, b) => {
+            const dateA = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+            const dateB = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+            return dateB - dateA;
+        });
 
         return NextResponse.json({ images });
     } catch (error) {
