@@ -82,8 +82,14 @@ export const getBuffer = async (key: string): Promise<Buffer | null> => {
 			}
 		}
 		
-		// If result is already a buffer (unlikely with Redis client), return it
-		return result as Buffer;
+		// Handle Buffer type with proper validation
+		if (Buffer.isBuffer(result)) {
+			return result;
+		}
+
+		// Log unexpected type for debugging
+		console.error(`Unexpected result type for key ${key}:`, typeof result);
+		return null;
 	} catch (error) {
 		console.error(`Error getting buffer for key ${key}:`, error);
 		return null;
