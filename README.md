@@ -75,6 +75,16 @@ npm run build
 npm start
 ```
 
+### Docker Compose Local
+```bash
+ # Rebuilds Images if you make changes to the containers
+docker compose -f docker-compose.localdev.yml up --build
+
+# Stops/Removes Containers
+docker compose -f docker-compose.localdev.yml down 
+```
+
+
 ## Usage
 
 ### Admin Login

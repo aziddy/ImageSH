@@ -1,13 +1,5 @@
 import { createClient } from 'redis';
 
-if (!process.env.REDIS_PASSWORD) {
-	console.error('REDIS_PASSWORD environment variable is not set');
-	process.exit(1);
-}
-
-console.log('Redis URL:', process.env.REDIS_URL);
-console.log('Redis Password:', process.env.REDIS_PASSWORD ? '****' : 'not set');
-
 let redisClient: ReturnType<typeof createClient> | null = null;
 
 /*
@@ -37,6 +29,13 @@ const getRedisClient = () => {
 
 // Ensure connection is established
 const connectRedis = async () => {
+	if (!process.env.REDIS_PASSWORD) {
+		throw new Error('REDIS_PASSWORD environment variable is not set');
+	}
+
+	console.log('Redis URL:', process.env.REDIS_URL);
+	console.log('Redis Password:', process.env.REDIS_PASSWORD ? '****' : 'not set');
+
 	const client = getRedisClient();
 	if (!client.isOpen) {
 		await client.connect();
