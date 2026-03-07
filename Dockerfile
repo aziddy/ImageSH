@@ -1,4 +1,4 @@
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts --legacy-peer-deps
 RUN npm rebuild sharp
 
 # Rebuild the source code only when needed
@@ -26,7 +26,7 @@ ARG ADMIN_PASSWORD
 ENV ADMIN_PASSWORD=${ADMIN_PASSWORD}
 ARG NEXTAUTH_SECRET
 ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-ARG NEXTAUTH_URL
+ARG NEXTAUTH_URL=http://localhost:3000
 ENV NEXTAUTH_URL=${NEXTAUTH_URL}
 ARG NEXT_PUBLIC_MAX_FILE_SIZE
 ENV NEXT_PUBLIC_MAX_FILE_SIZE=${NEXT_PUBLIC_MAX_FILE_SIZE}
