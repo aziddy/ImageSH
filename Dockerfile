@@ -7,7 +7,8 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --ignore-scripts
+RUN npm rebuild sharp
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -72,6 +73,8 @@ RUN chown nextjs:nodejs .next
 # Automatically leverage output traces to reduce image size
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+RUN chmod -R a-w /app
 
 USER nextjs
 
