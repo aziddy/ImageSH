@@ -1,0 +1,47 @@
+# Dependencies (installed fresh in the deps stage)
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output (rebuilt inside the image)
+.next
+out
+build
+dist
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+!env.example
+
+# Git
+.git
+.gitignore
+
+# Docker (avoids cache invalidation when these change)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Claude Code
+.claude
+
+# Docs and misc not needed at build time
+README.md
+docs
+scripts
+
+# Tests and coverage
+coverage
+*.test.ts
+*.test.tsx
+__tests__
