@@ -17,6 +17,12 @@ next-env.d.ts
 .env.*
 !env.example
 
+# Private keys and credential bundles
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+
 # Git
 .git
 .gitignore

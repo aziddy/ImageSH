@@ -75,6 +75,8 @@ npm run build
 npm start
 ```
 
+For a production Dokploy deployment using the Dockerfile, see [container hardening and read-only runtime settings](docs/PREVENT-RCE-HACKED-VPS.md#current-dockerfile-hardening-for-dokploy).
+
 ### Docker Compose Local
 ```bash
  # Rebuilds Images if you make changes to the containers

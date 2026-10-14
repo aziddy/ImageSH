@@ -1,12 +1,11 @@
-FROM node:20-alpine AS base
+FROM node:24-trixie-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --legacy-peer-deps
 RUN npm rebuild sharp
 
@@ -16,71 +15,46 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG REDIS_URL
-ENV REDIS_URL=${REDIS_URL}
-ARG REDIS_PASSWORD
-ENV REDIS_PASSWORD=${REDIS_PASSWORD}
-ARG ADMIN_USERNAME
-ENV ADMIN_USERNAME=${ADMIN_USERNAME}
-ARG ADMIN_PASSWORD
-ENV ADMIN_PASSWORD=${ADMIN_PASSWORD}
-ARG NEXTAUTH_SECRET
-ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-ARG NEXTAUTH_URL=http://localhost:3000
-ENV NEXTAUTH_URL=${NEXTAUTH_URL}
-ARG NEXT_PUBLIC_MAX_FILE_SIZE
+# Only public configuration belongs in the build. Dokploy supplies Redis,
+# admin and NextAuth credentials as environment variables at runtime.
+ARG NEXT_PUBLIC_MAX_FILE_SIZE=10485760
 ENV NEXT_PUBLIC_MAX_FILE_SIZE=${NEXT_PUBLIC_MAX_FILE_SIZE}
 
 # Set environment variables for Next.js
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
 # Build the application
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+# Prepare permissions while build tools are available. Root owns the code so
+# the runtime user cannot chmod it writable. Only Next.js's cache is writable.
+RUN mkdir -p /runtime/.next \
+    && cp -a /app/.next/standalone/. /runtime/ \
+    && cp -a /app/.next/static /runtime/.next/static \
+    && cp -a /app/public /runtime/public \
+    && mkdir -p /runtime/.next/cache \
+    && chown -R 0:0 /runtime \
+    && chmod -R a-w /runtime \
+    && chown 1001:1001 /runtime/.next/cache \
+    && chmod 0700 /runtime/.next/cache
 
-ARG REDIS_URL
-ENV REDIS_URL=${REDIS_URL}
-ARG REDIS_PASSWORD
-ENV REDIS_PASSWORD=${REDIS_PASSWORD}
-ARG ADMIN_USERNAME
-ENV ADMIN_USERNAME=${ADMIN_USERNAME}
-ARG ADMIN_PASSWORD
-ENV ADMIN_PASSWORD=${ADMIN_PASSWORD}
-ARG NEXTAUTH_SECRET
-ENV NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-ARG NEXTAUTH_URL
-ENV NEXTAUTH_URL=${NEXTAUTH_URL}
-ARG NEXT_PUBLIC_MAX_FILE_SIZE
-ENV NEXT_PUBLIC_MAX_FILE_SIZE=${NEXT_PUBLIC_MAX_FILE_SIZE}
-
+# Debian/glibc in both stages keeps Sharp's native binaries compatible.
+# Distroless provides Node without a shell, npm, apt, curl or wget.
+FROM gcr.io/distroless/nodejs24-debian13:nonroot AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000 \
+    HOME=/tmp
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+COPY --from=builder /runtime/ ./
 
-COPY --from=builder /app/public ./public
-
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-RUN chmod -R a-w /app
-
-USER nextjs
+USER 1001:1001
 
 EXPOSE 3000
 
-ENV PORT 3000
-
-# server.js is created by next build from the standalone output
-CMD ["node", "server.js"] 
+# Distroless's entrypoint is /nodejs/bin/node; no shell is used to start the app.
+CMD ["server.js"]
