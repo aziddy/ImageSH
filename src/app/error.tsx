@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 
 export default function Error({
     error,
@@ -14,25 +15,18 @@ export default function Error({
     }, [error]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center p-8 max-w-md">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                    Something went wrong
-                </h2>
-                <p className="text-gray-600 mb-4">
-                    An unexpected error occurred. Please try again.
+        <div className="flex min-h-dvh items-center justify-center bg-background px-6">
+            <div className="flex max-w-md flex-col items-center gap-3 text-center">
+                <h1 className="text-xl leading-tight font-semibold">Something went wrong</h1>
+                <p className="text-muted-foreground">
+                    This page hit an unexpected error. Try again, and reload the page if it keeps happening.
                 </p>
                 {error.digest && (
-                    <p className="text-xs text-gray-400 mb-4">
-                        Error ID: {error.digest}
-                    </p>
+                    <p className="text-[13px] text-muted-foreground tabular-nums">Error ID: {error.digest}</p>
                 )}
-                <button
-                    onClick={reset}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                    Try Again
-                </button>
+                <Button onClick={reset} className="mt-2">
+                    Try again
+                </Button>
             </div>
         </div>
     );

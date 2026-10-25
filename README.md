@@ -14,7 +14,7 @@ A modern, secure image sharing application built with Next.js, Shadcn UI, and Re
 - 🔗 **Unique Share URLs** - Each image gets a unique, shareable URL
 - 📋 **Automatic Clipboard Copy** - Share URLs are automatically copied
 - 🗑️ **Image Management** - View all uploaded images and delete as needed
-- 🎨 **Modern UI** - Beautiful interface built with Shadcn UI
+- 🎨 **Light and dark themes** - Clean interface built with Shadcn UI and Bricolage Grotesque
 - 🚀 **Fast & Optimized** - Images are processed and optimized before storage
 
 ## Prerequisites
@@ -97,27 +97,29 @@ docker compose -f docker-compose.localdev.yml down
 
 ### Uploading Images
 
-1. **Drag & Drop**: Drag an image file onto the upload area
-2. **Clipboard**: Copy an image and click "Paste from Clipboard" or use Ctrl/Cmd+V
-3. **File Selection**: Click "Select File" to browse
+1. **Drag & Drop**: Drag an image onto the upload area
+2. **Paste**: Press Ctrl/Cmd+V anywhere on the admin page, or use the Paste button
+3. **Choose file**: Click "Choose file" to browse
 
-After selecting an image:
-- Choose expiration time
+Pick how long the image lives in the "Lives for" menu, then:
+- Optionally rename it, or open "Reduce size" to scale it down before upload
 - Click "Upload"
-- The share URL is automatically copied to your clipboard
+- A share sheet opens with the link (already copied to your clipboard when the browser allows it) and a QR code
+
+Images over the size limit can be scaled down with "Reduce size" until they fit.
 
 ### Managing Images
 
-In the admin dashboard, you can:
-- View all uploaded images
-- See upload time and expiration status
-- Copy share URLs
-- Open images in new tabs
-- Delete images
+The admin page shows every live image as a thumbnail with a ring that drains as it nears expiry. The ring turns amber under a day and red under two hours. From each card you can:
+- Copy the share link
+- Open the image, show its QR code, rename it, or delete it from the "More actions" menu
+- Sort by newest, soonest to expire, or name
+
+Use the moon/sun button in the header to switch between light and dark themes.
 
 ### Sharing Images
 
-Share the generated URLs with anyone. Images are publicly accessible via their unique URLs until they expire.
+Share the generated URLs with anyone. Images are publicly accessible via their unique URLs until they expire. The viewer shows the image name, how long it has left, and a Save button.
 
 ## Technical Details
 

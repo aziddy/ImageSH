@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
             imageId,
             shareUrl,
             expiresAt: imageData.expiresAt,
+            image: imageData,
         });
     } catch (error) {
         console.error('Upload error:', error);

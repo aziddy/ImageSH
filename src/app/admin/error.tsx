@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 export default function AdminError({
@@ -15,25 +16,19 @@ export default function AdminError({
     }, [error]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="text-center p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                    Admin Panel Error
-                </h2>
-                <p className="text-gray-600 mb-4">
-                    There was an error loading the admin panel.
+        <div className="flex min-h-dvh items-center justify-center bg-background px-6">
+            <div className="flex max-w-md flex-col items-center gap-3 text-center">
+                <h1 className="text-xl leading-tight font-semibold">Your images couldn’t load</h1>
+                <p className="text-muted-foreground">
+                    Try again. If it keeps happening, sign in again or check that the server can reach Redis.
                 </p>
                 {error.digest && (
-                    <p className="text-xs text-gray-400 mb-4">
-                        Error ID: {error.digest}
-                    </p>
+                    <p className="text-[13px] text-muted-foreground tabular-nums">Error ID: {error.digest}</p>
                 )}
-                <div className="flex gap-4 justify-center">
-                    <Button onClick={reset} variant="default">
-                        Try Again
-                    </Button>
-                    <Button onClick={() => window.location.href = '/login'} variant="outline">
-                        Go to Login
+                <div className="mt-2 flex gap-2">
+                    <Button onClick={reset}>Try again</Button>
+                    <Button variant="outline" asChild>
+                        <Link href="/login">Go to sign in</Link>
                     </Button>
                 </div>
             </div>

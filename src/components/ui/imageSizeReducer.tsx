@@ -1,292 +1,156 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatFileSize } from '@/lib/format';
 
 interface ImageSizeReducerProps {
     file: File;
+    /** Called with the resized file, or null when the original should be used (100%). */
     onResizedFile: (resizedFile: File | null, percentage: number) => void;
+    onDimensions?: (dimensions: ImageDimensions) => void;
 }
 
-interface ImageDimensions {
+export interface ImageDimensions {
     width: number;
     height: number;
 }
 
-export function ImageSizeReducer({ file, onResizedFile }: ImageSizeReducerProps) {
+const ENCODABLE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSizeReducerProps) {
     const [percentage, setPercentage] = useState(100);
-    const [originalDimensions, setOriginalDimensions] = useState<ImageDimensions | null>(null);
+    const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [actualResizedSize, setActualResizedSize] = useState<number | null>(null);
+    const [resizedSize, setResizedSize] = useState<number | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
-    const sliderRef = useRef<HTMLInputElement>(null);
+    // Each resize gets an id so a slow, older result never overwrites a newer one.
+    const requestRef = useRef(0);
 
-    const formatFileSize = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-    };
+    useEffect(() => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            imageRef.current = img;
+            const next = { width: img.naturalWidth, height: img.naturalHeight };
+            setDimensions(next);
+            onDimensions?.(next);
+        };
+        img.src = url;
+        return () => {
+            img.onload = null;
+            URL.revokeObjectURL(url);
+        };
+    }, [file, onDimensions]);
 
-    const estimateFileSize = (width: number, height: number, originalSize: number): number => {
-        // Rough estimation: file size is roughly proportional to pixel count
-        const originalPixels = originalDimensions ? originalDimensions.width * originalDimensions.height : 1;
-        const newPixels = width * height;
-        const ratio = newPixels / originalPixels;
-        return Math.round(originalSize * ratio);
-    };
-
-    const handleResize = useCallback(async (scalePercent: number, img: HTMLImageElement, dimensions: ImageDimensions) => {
-        if (!canvasRef.current) return;
-
-        setIsProcessing(true);
-
-        try {
+    const resize = useCallback(
+        (scalePercent: number) => {
+            const img = imageRef.current;
             const canvas = canvasRef.current;
-            const newWidth = Math.round((dimensions.width * scalePercent) / 100);
-            const newHeight = Math.round((dimensions.height * scalePercent) / 100);
+            if (!img || !canvas || !dimensions) return;
 
-            canvas.width = newWidth;
-            canvas.height = newHeight;
+            const request = ++requestRef.current;
+
+            if (scalePercent >= 100) {
+                setIsProcessing(false);
+                setResizedSize(null);
+                onResizedFile(null, 100);
+                return;
+            }
+
+            setIsProcessing(true);
+            const width = Math.max(1, Math.round((dimensions.width * scalePercent) / 100));
+            const height = Math.max(1, Math.round((dimensions.height * scalePercent) / 100));
+            canvas.width = width;
+            canvas.height = height;
 
             const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            // Use high-quality image rendering
+            if (!ctx) {
+                setIsProcessing(false);
+                onResizedFile(null, scalePercent);
+                return;
+            }
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
 
-            // Draw resized image
-            ctx.drawImage(img, 0, 0, newWidth, newHeight);
-
-            // Convert canvas to blob
-            // Use quality 0.85 to match server-side compression (sharp uses quality 85)
-            // This ensures frontend blob size is closer to final server-processed size
-            const quality = 0.85;
+            // Canvas can't encode GIF, so animated or not, a resized GIF becomes a PNG.
+            const outputType = ENCODABLE_TYPES.includes(file.type) ? file.type : 'image/png';
+            // Quality 0.85 matches the server's sharp settings, so the size shown is close to the final one.
             canvas.toBlob(
                 (blob) => {
-                    if (blob) {
-                        // Store the actual blob size
-                        setActualResizedSize(blob.size);
-                        
-                        // Create a new File from the blob
-                        const resizedFile = new File([blob], file.name, {
-                            type: file.type,
-                            lastModified: Date.now(),
-                        });
-                        onResizedFile(resizedFile, scalePercent);
-                    } else {
-                        setActualResizedSize(null);
-                        onResizedFile(null, scalePercent);
-                    }
+                    if (request !== requestRef.current) return;
                     setIsProcessing(false);
+                    if (!blob) {
+                        setResizedSize(null);
+                        onResizedFile(null, scalePercent);
+                        return;
+                    }
+                    setResizedSize(blob.size);
+                    onResizedFile(
+                        new File([blob], file.name, { type: blob.type || outputType, lastModified: Date.now() }),
+                        scalePercent
+                    );
                 },
-                file.type || 'image/png',
-                quality // Quality 85% to match server-side sharp compression
+                outputType,
+                0.85
             );
-        } catch (error) {
-            console.error('Error resizing image:', error);
-            onResizedFile(null, scalePercent);
-            setIsProcessing(false);
-        }
-    }, [file, onResizedFile]);
+        },
+        [dimensions, file, onResizedFile]
+    );
 
-    // Load image and get original dimensions
-    useEffect(() => {
-        const loadImage = async () => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const dimensions = { width: img.width, height: img.height };
-                    setOriginalDimensions(dimensions);
-                    imageRef.current = img;
-                    // Trigger initial resize
-                    handleResize(100, img, dimensions);
-                };
-                img.src = e.target?.result as string;
-            };
-            reader.readAsDataURL(file);
-        };
-
-        loadImage();
-    }, [file, handleResize]);
-
-    // Resize image when percentage changes
-    useEffect(() => {
-        if (imageRef.current && originalDimensions) {
-            handleResize(percentage, imageRef.current, originalDimensions);
-        }
-    }, [percentage, originalDimensions, handleResize]);
-
-    // Update track background gradient when percentage changes
-    useEffect(() => {
-        if (sliderRef.current) {
-            const gradient = `linear-gradient(to right, rgb(37 99 235) 0%, rgb(37 99 235) ${percentage}%, rgb(229 231 235) ${percentage}%, rgb(229 231 235) 100%)`;
-            sliderRef.current.style.setProperty('--track-bg', gradient);
-        }
-    }, [percentage]);
-
-    const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = parseInt(e.target.value);
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = parseInt(e.target.value, 10);
         setPercentage(value);
-        // Reset actual size when percentage changes - will be updated when new blob is ready
-        setActualResizedSize(null);
+        setResizedSize(null);
+        resize(value);
     };
 
-    if (!originalDimensions) {
-        return (
-            <div className="text-sm text-gray-500">
-                Loading image dimensions...
-            </div>
-        );
+    const mightBeHeicConverted =
+        file.type === 'image/jpeg' &&
+        (/^img_/i.test(file.name) || /iphone|ipad/i.test(typeof navigator === 'undefined' ? '' : navigator.userAgent));
+
+    let summary = 'Reading image size…';
+    if (dimensions) {
+        const width = Math.round((dimensions.width * percentage) / 100);
+        const height = Math.round((dimensions.height * percentage) / 100);
+        if (percentage === 100) {
+            summary = `Full size, ${dimensions.width} × ${dimensions.height} px, ${formatFileSize(file.size)}.`;
+        } else {
+            const estimate = Math.round(file.size * ((width * height) / (dimensions.width * dimensions.height)));
+            const size = resizedSize !== null ? formatFileSize(resizedSize) : `about ${formatFileSize(estimate)}`;
+            summary = `${width} × ${height} px, ${size}. The server compresses it a little more.`;
+        }
     }
 
-    const newWidth = Math.round((originalDimensions.width * percentage) / 100);
-    const newHeight = Math.round((originalDimensions.height * percentage) / 100);
-    
-    // Use actual resized size if available, otherwise show estimate
-    const resizedSize = actualResizedSize !== null ? actualResizedSize : estimateFileSize(newWidth, newHeight, file.size);
-    const isShowingEstimate = actualResizedSize === null;
-    
-    // Detect if file might be from iOS (HEIC converted to JPEG)
-    // iOS typically converts HEIC to JPEG when selecting in browser
-    // We can detect this by checking if it's JPEG but file size seems unusually large
-    // or if the filename suggests it's from iOS Photos app
-    const mightBeHeicConverted = 
-        (file.type === 'image/jpeg' || file.type === 'image/jpg') &&
-        (file.name.toLowerCase().includes('img_') || 
-         file.name.toLowerCase().includes('photo') ||
-         navigator.userAgent.includes('iPhone') ||
-         navigator.userAgent.includes('iPad'));
-
-    // Calculate progress bar width to align with thumb center
-    // Range inputs position thumb center accounting for thumb width (1rem = 16px)
-    // The thumb center is at: thumbRadius + (percentage - min) / (max - min) * (trackWidth - 2*thumbRadius)
-    // For our case: 0.5rem + (percentage - 25) / 75 * (100% - 1rem)
-    const thumbRadius = 0.5; // 0.5rem = 8px (half of 1rem thumb)
-    const min = 25;
-    const max = 100;
-    const range = max - min;
-    const normalizedPercentage = (percentage - min) / range;
-    const progressWidth = `calc(${thumbRadius}rem + ${normalizedPercentage * 100}% * (100% - ${thumbRadius * 2}rem) / 100%)`;
-
     return (
-        <div className="space-y-3 p-4 border border-gray-200 rounded-lg bg-white shadow-sm">
-            <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="resize-slider" className="text-sm font-semibold text-gray-900">
-                        Resize Image
-                    </Label>
-                    <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
-                        {percentage}%
-                    </span>
-                </div>
-                <div className="space-y-2">
-                    <div className="relative h-6 flex items-center">
-                        <Input
-                            ref={sliderRef}
-                            id="resize-slider"
-                            type="range"
-                            min="25"
-                            max="100"
-                            step="5"
-                            value={percentage}
-                            onChange={handlePercentageChange}
-                            className="relative w-full h-2 appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed z-10 bg-transparent [&::-webkit-slider-track]:h-2 [&::-webkit-slider-track]:rounded-lg [&::-webkit-slider-track]:bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:mt-[-4px] [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-lg [&::-moz-range-track]:bg-transparent [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:border-none"
-                            disabled={isProcessing}
-                        />
-                        {/* Background track */}
-                        <div 
-                            className="absolute left-0 h-2 rounded-lg pointer-events-none"
-                            style={{
-                                width: '100%',
-                                backgroundColor: 'rgb(229 231 235)',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                zIndex: 0
-                            }}
-                        />
-                        {/* Progress bar - calculated to align with thumb center */}
-                        <div 
-                            className="absolute left-0 h-2 rounded-lg pointer-events-none"
-                            style={{
-                                width: progressWidth,
-                                backgroundColor: 'rgb(37 99 235)',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                zIndex: 1
-                            }}
-                        />
-                    </div>
-                    <div className="flex justify-between text-xs text-gray-400 px-1">
-                        <span>25%</span>
-                        <span>50%</span>
-                        <span>75%</span>
-                        <span>100%</span>
-                    </div>
-                </div>
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+                <label htmlFor="resize-slider" className="text-sm text-muted-foreground">
+                    Scale
+                </label>
+                <span className="text-sm font-medium tabular-nums">{percentage}%</span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
-                <div className="space-y-1">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Original</div>
-                    <div className="space-y-0.5 text-sm">
-                        <div className="font-medium text-gray-900">{originalDimensions.width} × {originalDimensions.height} px</div>
-                        <div className="text-gray-600">{formatFileSize(file.size)}</div>
-                        {mightBeHeicConverted && (
-                            <div className="text-xs text-amber-600 mt-1 flex items-start gap-1">
-                                <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>iOS converted HEIC to JPEG (may be larger than original)</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <div className="space-y-1">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resized</div>
-                    <div className="space-y-0.5 text-sm">
-                        <div className="font-medium text-gray-900">{newWidth} × {newHeight} px</div>
-                        <div className="text-gray-600">
-                            <span className={isShowingEstimate ? "text-gray-500" : ""}>
-                                {formatFileSize(resizedSize)}
-                            </span>
-                            {isShowingEstimate && (
-                                <span className="text-xs text-gray-400 ml-1">(estimate)</span>
-                            )}
-                            {!isShowingEstimate && (
-                                <span className="text-xs text-green-600 ml-1">(actual)</span>
-                            )}
-                        </div>
-                        {!isShowingEstimate && (
-                            <div className="text-xs text-blue-600 mt-1 flex items-start gap-1">
-                                <svg className="h-3 w-3 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>Server will optimize further (may reduce by ~5-15%)</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {isProcessing && (
-                <div className="text-xs text-blue-600 flex items-center gap-1.5">
-                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Processing...
-                </div>
+            <input
+                id="resize-slider"
+                type="range"
+                min={25}
+                max={100}
+                step={5}
+                value={percentage}
+                onChange={handleChange}
+                disabled={!dimensions}
+                className="h-6 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <p className="text-[13px] text-muted-foreground tabular-nums" aria-live="polite">
+                {isProcessing ? 'Resizing…' : summary}
+            </p>
+            {mightBeHeicConverted && (
+                <p className="text-[13px] text-muted-foreground">
+                    iPhone photos arrive as JPEG and can be larger than the original. Reducing the size helps.
+                </p>
             )}
-
-            {/* Hidden canvas for image processing */}
             <canvas ref={canvasRef} className="hidden" />
         </div>
     );
 }
-

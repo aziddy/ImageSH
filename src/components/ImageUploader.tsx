@@ -1,346 +1,382 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Upload, Clipboard, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { ClipboardPaste, Download, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { ImageSizeReducer } from '@/components/ui/imageSizeReducer';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ImageSizeReducer, type ImageDimensions } from '@/components/ui/imageSizeReducer';
+import type { CopyState } from '@/components/ShareSheet';
+import { cn } from '@/lib/utils';
+import { formatFileSize, shareUrlFor, type ImageData } from '@/lib/format';
+
+const VALID_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_SIZE = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760', 10);
+const MAX_SIZE_LABEL = formatFileSize(MAX_SIZE);
+
+const LIFETIMES = [
+    { value: '2h', label: '2 hours' },
+    { value: '1d', label: '1 day' },
+    { value: '3d', label: '3 days' },
+    { value: '7d', label: '7 days' },
+    { value: '1m', label: '1 month' },
+    { value: '3m', label: '3 months' },
+    { value: '6m', label: '6 months' },
+    { value: '1y', label: '1 year' },
+];
 
 interface UploadResponse {
     success: boolean;
     imageId?: string;
-    shareUrl?: string;
     expiresAt?: string;
+    image?: ImageData;
     error?: string;
 }
 
-export default function ImageUploader({ onUploadSuccess }: { onUploadSuccess: () => void }) {
-    const [isUploading, setIsUploading] = useState(false);
+const noopSubscribe = () => () => {};
+const canReadClipboard = () => typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function';
+
+function LifetimeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+    return (
+        <Select value={value} onValueChange={onChange}>
+            <SelectTrigger id="lifetime" className="w-36">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                {LIFETIMES.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+export default function ImageUploader({
+    onUploaded,
+}: {
+    onUploaded: (image: ImageData, copyState: CopyState) => void;
+}) {
+    const [lifetime, setLifetime] = useState('1d');
+    const [file, setFile] = useState<File | null>(null);
+    const [name, setName] = useState('');
+    const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
+    const [resized, setResized] = useState<{ file: File | null; percentage: number }>({ file: null, percentage: 100 });
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [resizedPreviewUrl, setResizedPreviewUrl] = useState<string | null>(null);
+    const [reduceOpen, setReduceOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [resizedFile, setResizedFile] = useState<File | null>(null);
-    const [resizePercentage, setResizePercentage] = useState(100);
-    const [expiration, setExpiration] = useState('1d');
-    const [preview, setPreview] = useState<string | null>(null);
-    const [customName, setCustomName] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const canPaste = useSyncExternalStore(noopSubscribe, canReadClipboard, () => false);
 
-    const handleFile = useCallback((file: File) => {
-        const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!validTypes.includes(file.type)) {
-            toast.error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
+    // Release preview URLs when they are replaced or the uploader unmounts.
+    useEffect(() => () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+    }, [previewUrl]);
+    useEffect(() => () => {
+        if (resizedPreviewUrl) URL.revokeObjectURL(resizedPreviewUrl);
+    }, [resizedPreviewUrl]);
+
+    const clear = useCallback(() => {
+        setFile(null);
+        setName('');
+        setDimensions(null);
+        setResized({ file: null, percentage: 100 });
+        setPreviewUrl(null);
+        setResizedPreviewUrl(null);
+        setReduceOpen(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }, []);
+
+    const handleFile = useCallback((incoming: File) => {
+        if (!VALID_TYPES.includes(incoming.type)) {
+            toast.error('That file type isn’t supported. Use a JPEG, PNG, GIF, or WebP image.');
             return;
         }
+        setFile(incoming);
+        setName(incoming.name.replace(/\.[^/.]+$/, '') || incoming.name);
+        setDimensions(null);
+        setResized({ file: null, percentage: 100 });
+        setPreviewUrl(URL.createObjectURL(incoming));
+        setResizedPreviewUrl(null);
+        // Oversized images can still be shared once they're scaled down, so open the size controls.
+        setReduceOpen(incoming.size > MAX_SIZE);
+    }, []);
 
-        const maxSize = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760');
-        if (file.size > maxSize) {
-            toast.error(`File size exceeds ${maxSize / 1024 / 1024}MB limit`);
-            return;
-        }
-
-        setSelectedFile(file);
-        setResizedFile(null); // Reset resized file when new file is selected
-        setResizePercentage(100); // Reset percentage
-
-        // Set default custom name to filename without extension
-        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-        setCustomName(nameWithoutExt);
-
-        // Create preview
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            setPreview(e.target?.result as string);
+    // Paste works anywhere on the page, except while typing in a field.
+    useEffect(() => {
+        const onPaste = (event: ClipboardEvent) => {
+            if (isUploading) return;
+            const target = event.target as HTMLElement | null;
+            if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+            const item = Array.from(event.clipboardData?.items ?? []).find(
+                (entry) => entry.kind === 'file' && entry.type.startsWith('image/')
+            );
+            const pasted = item?.getAsFile();
+            if (pasted) {
+                event.preventDefault();
+                handleFile(pasted);
+            }
         };
-        reader.readAsDataURL(file);
-    }, []);
+        window.addEventListener('paste', onPaste);
+        return () => window.removeEventListener('paste', onPaste);
+    }, [handleFile, isUploading]);
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            handleFile(file);
-        }
-    }, [handleFile]);
-
-    const handleDragOver = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-    }, []);
-
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-    }, []);
-
-    const handlePaste = useCallback((e: React.ClipboardEvent) => {
-        const items = e.clipboardData.items;
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                const file = items[i].getAsFile();
-                if (file) {
-                    handleFile(file);
-                    break;
+    const pasteFromClipboard = async () => {
+        try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+                const type = item.types.find((t) => VALID_TYPES.includes(t)) ?? item.types.find((t) => t.startsWith('image/'));
+                if (type) {
+                    const blob = await item.getType(type);
+                    handleFile(new File([blob], `pasted-image.${type.split('/')[1]}`, { type }));
+                    return;
                 }
             }
+            toast.error('There’s no image on your clipboard. Copy an image first, then paste.');
+        } catch {
+            toast.error('Your browser didn’t allow pasting from a button. Press Ctrl+V or ⌘V on this page instead.');
         }
-    }, [handleFile]);
+    };
 
-    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            handleFile(file);
-        }
-    }, [handleFile]);
+    const handleResized = useCallback((resizedFile: File | null, percentage: number) => {
+        setResized({ file: resizedFile, percentage });
+        setResizedPreviewUrl(resizedFile ? URL.createObjectURL(resizedFile) : null);
+    }, []);
 
-    const handleResizedFile = useCallback((file: File | null, percentage: number) => {
-        setResizedFile(file);
-        setResizePercentage(percentage);
-        // Update preview with resized image to show pixelation, but keep container size fixed
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                setPreview(e.target?.result as string);
-            };
-            reader.readAsDataURL(file);
-        } else if (selectedFile) {
-            // If no resized file, show original
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                setPreview(e.target?.result as string);
-            };
-            reader.readAsDataURL(selectedFile);
-        }
-    }, [selectedFile]);
+    const dragHandlers = {
+        onDragEnter: (e: React.DragEvent) => {
+            e.preventDefault();
+            setIsDragging(true);
+        },
+        onDragOver: (e: React.DragEvent) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        },
+        onDragLeave: (e: React.DragEvent) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+            setIsDragging(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const dropped = e.dataTransfer.files[0];
+            if (dropped) handleFile(dropped);
+        },
+    };
 
-    const handleUpload = async () => {
-        if (!selectedFile) return;
+    const fileInput = (
+        <input
+            ref={fileInputRef}
+            type="file"
+            accept={VALID_TYPES.join(',')}
+            className="hidden"
+            onChange={(e) => {
+                const chosen = e.target.files?.[0];
+                if (chosen) handleFile(chosen);
+                e.target.value = '';
+            }}
+        />
+    );
 
-        // Use resized file if available, otherwise use original
-        const fileToUpload = resizedFile || selectedFile;
+    const uploadFile = file && resized.percentage < 100 && resized.file ? resized.file : file;
+    const tooBig = !!uploadFile && uploadFile.size > MAX_SIZE;
 
-        // Validate resized file size
-        const maxSize = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760');
-        if (fileToUpload.size > maxSize) {
-            toast.error(`File size exceeds ${maxSize / 1024 / 1024}MB limit`);
-            return;
-        }
-
+    const upload = async () => {
+        if (!file || !uploadFile || isUploading || tooBig) return;
         setIsUploading(true);
-        
-        // Show immediate progress feedback
-        toast.info('Uploading image...', {
-            duration: Infinity, // Keep showing until we dismiss it
-            id: 'upload-progress'
-        });
-        
+
         const formData = new FormData();
-        formData.append('file', fileToUpload);
-        formData.append('expiration', expiration);
-        if (customName.trim()) {
-            formData.append('name', customName.trim());
-        }
+        formData.append('file', uploadFile);
+        formData.append('expiration', lifetime);
+        if (name.trim()) formData.append('name', name.trim());
 
         try {
-            const response = await fetch('/api/admin/upload', {
-                method: 'POST',
-                body: formData,
-            });
+            const response = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+            let data: UploadResponse | null = null;
+            try {
+                data = await response.json();
+            } catch {
+                // Non-JSON error page; fall through to the status-based message.
+            }
 
-            if (!response.ok) {
-                // Handle HTTP error status
-                let errorMessage = 'Upload failed';
-                try {
-                    const errorData = await response.json();
-                    errorMessage = errorData.error || errorMessage;
-                } catch {
-                    // If JSON parsing fails, use status text
-                    errorMessage = `Upload failed (${response.status})`;
-                }
-                // Dismiss progress toast before showing error
-                toast.dismiss('upload-progress');
-                toast.error(errorMessage);
+            if (!response.ok || !data?.success || !data.imageId) {
+                const reason = data?.error;
+                toast.error(
+                    reason
+                        ? `${reason}${reason.endsWith('.') ? '' : '.'}`
+                        : `Upload failed with status ${response.status}. Try again.`
+                );
                 return;
             }
 
-            const data: UploadResponse = await response.json();
+            const image: ImageData = data.image ?? {
+                id: data.imageId,
+                originalName: file.name,
+                customName: name.trim() || null,
+                displayName: name.trim() || file.name,
+                mimeType: uploadFile.type,
+                size: uploadFile.size,
+                uploadedAt: new Date().toISOString(),
+                uploadedBy: '',
+                expiresAt: data.expiresAt ?? new Date().toISOString(),
+            };
 
-            if (data.success && data.shareUrl) {
-                // Dismiss progress toast
-                toast.dismiss('upload-progress');
-                toast.success('Image uploaded successfully!');
-
-                // Copy share URL to clipboard
-                try {
-                    await navigator.clipboard.writeText(data.shareUrl);
-                    toast.success('Share URL copied to clipboard!');
-                } catch {
-                    // Clipboard access might fail on some iOS browsers
-                    toast.info('Image uploaded! (Could not copy URL to clipboard)');
-                }
-
-                // Reset form
-                setSelectedFile(null);
-                setResizedFile(null);
-                setResizePercentage(100);
-                setPreview(null);
-                setExpiration('1d');
-                setCustomName('');
-
-                // Notify parent to refresh list
-                onUploadSuccess();
-            } else {
-                // Dismiss progress toast before showing error
-                toast.dismiss('upload-progress');
-                toast.error(data.error || 'Upload failed');
+            let copyState: CopyState = 'failed';
+            try {
+                await navigator.clipboard.writeText(shareUrlFor(image.id));
+                copyState = 'copied';
+            } catch {
+                // Some browsers (iOS Safari) block clipboard writes after an await; the share sheet covers it.
             }
-        } catch (error) {
-            console.error('Upload error:', error);
-            // Dismiss progress toast before showing error
-            toast.dismiss('upload-progress');
-            toast.error('Upload failed. Please check your connection and try again.');
+
+            clear();
+            onUploaded(image, copyState);
+        } catch {
+            toast.error('Upload failed. Check your connection and try again.');
         } finally {
             setIsUploading(false);
         }
     };
 
-    const clearSelection = () => {
-        setSelectedFile(null);
-        setResizedFile(null);
-        setResizePercentage(100);
-        setPreview(null);
-        setCustomName('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    };
+    if (!file) {
+        return (
+            <section
+                aria-label="Upload an image"
+                {...dragHandlers}
+                className={cn(
+                    'flex min-h-[152px] flex-wrap items-center gap-x-6 gap-y-4 rounded-lg border border-dashed border-dropzone bg-card p-5 transition-colors sm:p-7',
+                    isDragging && 'border-primary bg-primary/5'
+                )}
+            >
+                <div className="hidden size-12 shrink-0 items-center justify-center rounded-full bg-muted sm:flex">
+                    <Download className="size-6" aria-hidden="true" />
+                </div>
+                <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-2.5">
+                    <p className="text-base font-medium">
+                        {isDragging ? 'Drop to add this image' : 'Drop, paste, or choose an image'}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <label htmlFor="lifetime" className="text-sm text-muted-foreground">
+                            Lives for
+                        </label>
+                        <LifetimeSelect value={lifetime} onChange={setLifetime} />
+                        <span className="text-[13px] text-muted-foreground">
+                            JPEG, PNG, GIF, or WebP up to {MAX_SIZE_LABEL}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex gap-2 max-sm:w-full">
+                    {canPaste && (
+                        <Button variant="outline" onClick={pasteFromClipboard} className="max-sm:flex-1">
+                            <ClipboardPaste />
+                            Paste
+                        </Button>
+                    )}
+                    <Button onClick={() => fileInputRef.current?.click()} className="max-sm:flex-1">
+                        Choose file
+                    </Button>
+                </div>
+                {fileInput}
+            </section>
+        );
+    }
+
+    const shownPreview = resized.percentage < 100 && resizedPreviewUrl ? resizedPreviewUrl : previewUrl;
 
     return (
-        <Card>
-            <CardContent className="p-6">
-                <div
-                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-                        }`}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onPaste={handlePaste}
-                >
-                    {!selectedFile ? (
-                        <>
-                            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <p className="text-lg font-medium mb-2">Upload an image</p>
-                            <p className="text-sm text-gray-500 mb-4">
-                                Drag and drop, paste from clipboard, or click to select
-                            </p>
-                            <div className="flex gap-2 justify-center">
-                                <Button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    variant="outline"
-                                >
-                                    Select File
-                                </Button>
-                                <Button
-                                    onClick={async () => {
-                                        try {
-                                            const items = await navigator.clipboard.read();
-                                            for (const item of items) {
-                                                if (item.types.includes('image/png') || item.types.includes('image/jpeg')) {
-                                                    const blob = await item.getType(item.types[0]);
-                                                    const file = new File([blob], 'pasted-image.png', { type: blob.type });
-                                                    handleFile(file);
-                                                    break;
-                                                }
-                                            }
-                                        } catch {
-                                            toast.error('Failed to paste image');
-                                        }
-                                    }}
-                                    variant="outline"
-                                >
-                                    <Clipboard className="h-4 w-4 mr-2" />
-                                    Paste from Clipboard
-                                </Button>
-                            </div>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleFileSelect}
-                            />
-                        </>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="relative inline-block w-full">
-                                <div className="w-full h-64 flex items-center justify-center bg-gray-50 rounded border border-gray-200 overflow-hidden">
-                                    {preview && (
-                                        <img
-                                            src={preview}
-                                            alt="Preview"
-                                            className="rounded"
-                                            style={{ 
-                                                imageRendering: resizePercentage < 100 ? 'pixelated' : 'auto',
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                display: 'block'
-                                            }}
-                                        />
-                                    )}
-                                </div>
-                                <button
-                                    onClick={clearSelection}
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors z-10"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </div>
-                            <p className="text-sm text-gray-600">{selectedFile.name}</p>
-                            <div className="flex flex-col gap-4">
-                                <ImageSizeReducer file={selectedFile} onResizedFile={handleResizedFile} />
-                                <div className="flex items-center gap-2">
-                                    <label htmlFor="custom-name" className="text-sm font-medium text-gray-700">
-                                        Name:
-                                    </label>
-                                    <Input
-                                        id="custom-name"
-                                        type="text"
-                                        value={customName}
-                                        onChange={(e) => setCustomName(e.target.value)}
-                                        placeholder="Enter a custom name for this image"
-                                        className="flex-1"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-4 justify-center">
-                                    <Select value={expiration} onValueChange={setExpiration}>
-                                        <SelectTrigger className="w-48">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="2h">2 hours</SelectItem>
-                                            <SelectItem value="1d">1 day</SelectItem>
-                                            <SelectItem value="3d">3 days</SelectItem>
-                                            <SelectItem value="7d">7 days</SelectItem>
-                                            <SelectItem value="1m">1 month</SelectItem>
-                                            <SelectItem value="3m">3 months</SelectItem>
-                                            <SelectItem value="6m">6 months</SelectItem>
-                                            <SelectItem value="1y">1 year</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Button onClick={handleUpload} disabled={isUploading}>
-                                        {isUploading ? 'Uploading...' : 'Upload'}
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
+        <section
+            aria-label="Image ready to upload"
+            {...dragHandlers}
+            className={cn(
+                'flex flex-col gap-6 rounded-lg border bg-card p-4 transition-colors sm:p-6 md:flex-row',
+                isDragging && 'border-primary bg-primary/5'
+            )}
+        >
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+                <div className="aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+                    {shownPreview && (
+                        <img
+                            src={shownPreview}
+                            alt={`Preview of ${file.name}`}
+                            className="size-full object-contain"
+                            style={{ imageRendering: resized.percentage < 100 ? 'pixelated' : 'auto' }}
+                        />
                     )}
                 </div>
-            </CardContent>
-        </Card>
+                <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground tabular-nums">
+                    <span className="min-w-0 truncate" title={file.name}>
+                        {file.name}
+                        {dimensions && `, ${dimensions.width} × ${dimensions.height}`}, {formatFileSize(file.size)}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={clear} disabled={isUploading}>
+                        Remove
+                    </Button>
+                </div>
+            </div>
+
+            <form
+                className="flex min-w-0 flex-1 flex-col gap-4"
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    upload();
+                }}
+            >
+                <div className="flex flex-col gap-1.5">
+                    <label htmlFor="image-name" className="text-sm font-medium">
+                        Name
+                    </label>
+                    <Input
+                        id="image-name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Shown to people you share with"
+                        autoComplete="off"
+                    />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                    <label htmlFor="lifetime" className="text-sm font-medium">
+                        Lives for
+                    </label>
+                    <LifetimeSelect value={lifetime} onChange={setLifetime} />
+                </div>
+                <details
+                    open={reduceOpen}
+                    onToggle={(e) => setReduceOpen(e.currentTarget.open)}
+                    className="border-t pt-3"
+                >
+                    <summary className="cursor-pointer rounded-md text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                        Reduce size{resized.percentage < 100 && ` (${resized.percentage}%)`}
+                    </summary>
+                    <div className="pt-3">
+                        <ImageSizeReducer
+                            key={`${file.name}-${file.size}-${file.lastModified}`}
+                            file={file}
+                            onResizedFile={handleResized}
+                            onDimensions={setDimensions}
+                        />
+                    </div>
+                </details>
+                {tooBig && uploadFile && (
+                    <p role="alert" className="text-[13px] text-destructive">
+                        This image is {formatFileSize(uploadFile.size)}. The limit is {MAX_SIZE_LABEL}, so reduce its
+                        size above before uploading.
+                    </p>
+                )}
+                <div className="mt-auto flex gap-2 pt-2">
+                    <Button type="submit" disabled={isUploading || tooBig}>
+                        {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                        {isUploading ? 'Uploading…' : 'Upload'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={clear} disabled={isUploading}>
+                        Cancel
+                    </Button>
+                </div>
+            </form>
+            {fileInput}
+        </section>
     );
-} 
+}
