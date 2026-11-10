@@ -51,3 +51,6 @@ coverage
 *.test.ts
 *.test.tsx
 __tests__
+
+# Native iOS sources, signing assets, and local Xcode build caches
+ios/

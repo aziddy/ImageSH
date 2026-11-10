@@ -44,3 +44,9 @@ next-env.d.ts
 .DS_Store
 *.DS_Store
 **/.DS_Store
+
+# Local Xcode builds and user preferences
+ios/.build/
+ios/TestResults/
+**/xcuserdata/
+*.xcuserstate

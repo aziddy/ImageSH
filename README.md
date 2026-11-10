@@ -89,6 +89,12 @@ docker compose -f docker-compose.localdev.yml down
 
 ## Usage
 
+### Native iOS App
+
+The native SwiftUI app includes a Photos share extension and uses the same server and admin account as the website. It supports iOS 17+, image uploads, resizing, sharing, QR codes, and library management. Open `ios/ImageSH.xcodeproj` to build with your Apple Developer signing team.
+
+See [iPhone setup, signing, and tests](ios/README.md) for installation instructions.
+
 ### Admin Login
 
 1. Navigate to `/login` or any protected route
