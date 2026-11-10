@@ -48,6 +48,7 @@ export async function GET(
         return new Response(imageBuffer, {
             headers: {
                 'Content-Type': contentType,
+                'X-Robots-Tag': 'noindex',
                 'Cache-Control': 'public, max-age=3600',
                 'Content-Disposition': `inline; filename="${filename}"`,
             },
@@ -59,4 +60,4 @@ export async function GET(
             { status: 500 }
         );
     }
-} 
+}
