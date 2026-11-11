@@ -10,7 +10,7 @@ Upload a single image from Photos, Files, or the Paste button. Choose a name and
 
 After signing in once, open Photos, select one image, tap **Share**, and choose **ImageSH**. If it is not visible, use **More** to enable it. The extension uses the app's existing login and server settings.
 
-HEIC images are converted to JPEG. Resized PNGs preserve transparency. Converted/resized images are limited to 4096 pixels on the longest side to keep sharing reliable on large iPhone photos. Original JPEG, PNG, GIF, and WebP uploads are passed through at 100% scale; the server applies its existing processing, including flattening GIFs. The app checks a 10 MB upload limit and displays any additional server validation errors.
+HEIC images are converted to JPEG. Resized PNGs preserve transparency. Converted/resized images are limited to 4096 pixels on the longest side to keep sharing reliable on large iPhone photos. Original JPEG, PNG, GIF, and WebP uploads are passed through at 100% scale; the server applies its existing processing, including flattening GIFs. The app checks a 10,485,760-byte (10.49 MB) upload limit and displays any additional server validation errors. File sizes use the same decimal units and rounding as the website. Upload sizes describe the prepared file; image details show the saved file size, including its exact byte count.
 
 Uploads run while the editor is open. Failed uploads remain available for manual retry; there is no background queue. If a connection fails after sending the image, check the library before retrying because the server may have completed the upload.
 

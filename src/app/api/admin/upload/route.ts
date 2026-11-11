@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { setWithExpiry, setBufferWithExpiry } from '@/lib/redis';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
+import { formatFileSize } from '@/lib/format';
 
 const MAX_FILE_SIZE = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760');
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
         if (file.size > MAX_FILE_SIZE) {
             return NextResponse.json(
-                { error: `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` },
+                { error: `File size exceeds the ${formatFileSize(MAX_FILE_SIZE)} (${MAX_FILE_SIZE} bytes) limit` },
                 { status: 400 }
             );
         }
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
             expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
         };
 
-        // Store image data and binary separately (binary as raw buffer for efficiency)
+        // Metadata size is the downloadable file's byte count; Redis encodes it as base64.
         await setWithExpiry(`image:${imageId}:data`, JSON.stringify(imageData), ttl);
         await setBufferWithExpiry(`image:${imageId}:binary`, processedImage, ttl);
 
@@ -127,4 +128,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
-} 
+}

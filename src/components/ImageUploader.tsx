@@ -182,7 +182,7 @@ export default function ImageUploader({
         />
     );
 
-    const uploadFile = file && resized.percentage < 100 && resized.file ? resized.file : file;
+    const uploadFile = resized.percentage < 100 ? resized.file : file;
     const tooBig = !!uploadFile && uploadFile.size > MAX_SIZE;
 
     const upload = async () => {
@@ -203,27 +203,19 @@ export default function ImageUploader({
                 // Non-JSON error page; fall through to the status-based message.
             }
 
-            if (!response.ok || !data?.success || !data.imageId) {
+            if (!response.ok || !data?.success || !data.imageId || !data.image) {
                 const reason = data?.error;
                 toast.error(
                     reason
                         ? `${reason}${reason.endsWith('.') ? '' : '.'}`
-                        : `Upload failed with status ${response.status}. Try again.`
+                        : response.ok
+                          ? 'The server returned incomplete image details. Refresh the library before retrying.'
+                          : `Upload failed with status ${response.status}. Try again.`
                 );
                 return;
             }
 
-            const image: ImageData = data.image ?? {
-                id: data.imageId,
-                originalName: file.name,
-                customName: name.trim() || null,
-                displayName: name.trim() || file.name,
-                mimeType: uploadFile.type,
-                size: uploadFile.size,
-                uploadedAt: new Date().toISOString(),
-                uploadedBy: '',
-                expiresAt: data.expiresAt ?? new Date().toISOString(),
-            };
+            const image = data.image;
 
             let copyState: CopyState = 'failed';
             try {
@@ -308,8 +300,8 @@ export default function ImageUploader({
                     )}
                 </div>
                 <div className="flex items-center justify-between gap-3 text-[13px] text-muted-foreground tabular-nums">
-                    <span className="min-w-0 truncate" title={file.name}>
-                        {file.name}
+                    <span className="min-w-0 truncate" title={`${file.name}, ${file.size} bytes`}>
+                        Original: {file.name}
                         {dimensions && `, ${dimensions.width} × ${dimensions.height}`}, {formatFileSize(file.size)}
                     </span>
                     <Button variant="outline" size="sm" onClick={clear} disabled={isUploading}>
@@ -353,10 +345,11 @@ export default function ImageUploader({
                     </summary>
                     <div className="pt-3">
                         <ImageSizeReducer
-                            key={`${file.name}-${file.size}-${file.lastModified}`}
+                            key={previewUrl}
                             file={file}
                             onResizedFile={handleResized}
                             onDimensions={setDimensions}
+                            disabled={isUploading}
                         />
                     </div>
                 </details>
@@ -367,7 +360,7 @@ export default function ImageUploader({
                     </p>
                 )}
                 <div className="mt-auto flex gap-2 pt-2">
-                    <Button type="submit" disabled={isUploading || tooBig}>
+                    <Button type="submit" disabled={isUploading || !uploadFile || tooBig}>
                         {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
                         {isUploading ? 'Uploading…' : 'Upload'}
                     </Button>

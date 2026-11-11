@@ -65,7 +65,9 @@ export default function ImageCard({ image, now, onCopy, onShare, onRename, onDel
                         <span className={cn('whitespace-nowrap', lifetime.level === 'last' && 'font-medium text-foreground')}>
                             {formatTimeLeft(lifetime.remaining)}
                         </span>
-                        <span className="ml-auto whitespace-nowrap max-sm:hidden">{formatFileSize(image.size)}</span>
+                        <span className="ml-auto whitespace-nowrap max-sm:hidden" title={`${image.size} bytes`}>
+                            {formatFileSize(image.size)}
+                        </span>
                     </div>
                 </div>
                 <div className="flex gap-2">

@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		15F16158B38FA34FC73EBA01 /* BackendIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A518697EEF7602BF6927EB4 /* BackendIntegrationTests.swift */; };
 		18DDFF63A682E87044E171AE /* UploadComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC93B901A487146C7DE970E9 /* UploadComposer.swift */; };
+		1FF4AEFE81B73A9E65098E41 /* FileSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D4C6A90B8C0F2E913EA356 /* FileSize.swift */; };
+		20DB8054622590850C2738B8 /* FileSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D4C6A90B8C0F2E913EA356 /* FileSize.swift */; };
 		245E574ABB02A9E883EC10BF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 643728720841543B52E35CBF /* APIClient.swift */; };
 		417573CB079E3EC10B8D61AD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB0F36D1D4E711B599EE41AC /* Models.swift */; };
 		4582613740168871DAEBC981 /* UploadEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE36B3D31A2DEA0B3B6D21A9 /* UploadEntryView.swift */; };
@@ -87,6 +89,7 @@
 		6A518697EEF7602BF6927EB4 /* BackendIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendIntegrationTests.swift; sourceTree = "<group>"; };
 		6A68A019DA25DBA58BF035CF /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		7FB8C0D87D4340C63C0CF0B3 /* Configuration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Configuration.swift; sourceTree = "<group>"; };
+		A6D4C6A90B8C0F2E913EA356 /* FileSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSize.swift; sourceTree = "<group>"; };
 		AB2CEC07D398B105237C6395 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		C48687C6099ED6AA0D41A2B6 /* ImageSHShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ImageSHShare.entitlements; sourceTree = "<group>"; };
 		C4C4EB13B42E35937C441209 /* ImageSHApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSHApp.swift; sourceTree = "<group>"; };
@@ -106,6 +109,7 @@
 			children = (
 				643728720841543B52E35CBF /* APIClient.swift */,
 				7FB8C0D87D4340C63C0CF0B3 /* Configuration.swift */,
+				A6D4C6A90B8C0F2E913EA356 /* FileSize.swift */,
 				4AAEE0B1BAD93553E4C3B07F /* ImagePreparation.swift */,
 				EB0F36D1D4E711B599EE41AC /* Models.swift */,
 				49A2722F99D3B24E4EB425D4 /* SessionStore.swift */,
@@ -344,6 +348,7 @@
 				AB014F48191A618874E3BE2D /* AppModel.swift in Sources */,
 				D21F6366D3605F172311168E /* Configuration.swift in Sources */,
 				8524050B02FED14A90C35BDB /* ContentView.swift in Sources */,
+				1FF4AEFE81B73A9E65098E41 /* FileSize.swift in Sources */,
 				B75EFC690263FEF53B50559B /* ImagePreparation.swift in Sources */,
 				B1B29346C6703C5440E1DB0F /* ImageSHApp.swift in Sources */,
 				417573CB079E3EC10B8D61AD /* Models.swift in Sources */,
@@ -360,6 +365,7 @@
 			files = (
 				C295083349104B1FCEED4DA0 /* APIClient.swift in Sources */,
 				52A42AD73C6EFD2585D27885 /* Configuration.swift in Sources */,
+				20DB8054622590850C2738B8 /* FileSize.swift in Sources */,
 				98EAFD8C95629916A10AEE71 /* ImagePreparation.swift in Sources */,
 				8713815B5EE057BCED3E1352 /* Models.swift in Sources */,
 				59E265B79E3F5940EF59B134 /* SessionStore.swift in Sources */,

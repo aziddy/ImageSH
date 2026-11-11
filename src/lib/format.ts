@@ -17,9 +17,15 @@ export interface ImageData {
 }
 
 export function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`;
+    // Decimal units and up to two decimal places match the iOS app.
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1000 && unit < units.length - 1) {
+        value /= 1000;
+        unit++;
+    }
+    return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, useGrouping: false }).format(value)} ${units[unit]}`;
 }
 
 /**

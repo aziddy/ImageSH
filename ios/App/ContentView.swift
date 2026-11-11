@@ -223,7 +223,7 @@ private struct ImageDetailView: View {
                 RemoteImage(url: client.imageURL(for: image), fit: true).frame(minHeight: 220, maxHeight: 500)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                 Text(image.displayName).font(.title2.bold())
-                LabeledContent("Size", value: ByteCountFormatter.string(fromByteCount: Int64(image.size), countStyle: .file))
+                LabeledContent("File size", value: "\(FileSize.string(image.size)) (\(image.size) bytes)")
                 LabeledContent("Uploaded", value: image.uploadedAt.formatted(date: .abbreviated, time: .shortened))
                 LabeledContent("Expires", value: image.expiresAt.formatted(date: .abbreviated, time: .shortened))
                 ShareLink(item: client.shareURL(for: image)) { Label("Share link", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }

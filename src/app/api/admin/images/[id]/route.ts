@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import getRedis from '@/lib/redis';
+import getRedis, { getBufferByteLength } from '@/lib/redis';
 
 export async function PATCH(
     request: NextRequest,
@@ -44,7 +44,13 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid image data structure' }, { status: 500 });
         }
 
-        // Update the name fields
+        const size = await getBufferByteLength(`image:${imageId}:binary`);
+        if (size === null) {
+            return NextResponse.json({ error: 'Image binary not found' }, { status: 404 });
+        }
+
+        // Return the same file size as listing and downloading, including older images.
+        imageData.size = size;
         imageData.customName = name.trim();
         imageData.displayName = name.trim();
 
@@ -101,4 +107,4 @@ export async function DELETE(
             { status: 500 }
         );
     }
-} 
+}

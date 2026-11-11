@@ -48,8 +48,9 @@ export async function GET(
         return new Response(imageBuffer, {
             headers: {
                 'Content-Type': contentType,
+                'Content-Length': String(imageBuffer.length),
                 'X-Robots-Tag': 'noindex',
-                'Cache-Control': 'public, max-age=3600',
+                'Cache-Control': 'public, max-age=3600, no-transform',
                 'Content-Disposition': `inline; filename="${filename}"`,
             },
         });

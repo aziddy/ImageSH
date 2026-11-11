@@ -47,7 +47,7 @@ enum APIError: LocalizedError, Equatable {
         case .notFound: "This image has expired or was deleted."
         case .invalidResponse: "The server returned an unexpected response. Check the server address and try again."
         case .server(let message): message
-        case .tooLarge: "This image is over 10 MB. Reduce its size before uploading."
+        case .tooLarge: "This image is over \(FileSize.string(AppConfiguration.maxUploadBytes)). Reduce its size before uploading."
         case .storage(let message): "Couldn’t save your login securely. \(message)"
         }
     }

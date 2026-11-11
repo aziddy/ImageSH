@@ -38,6 +38,10 @@ import XCTest
             XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
             XCTAssertEqual(response.mimeType, "image/png")
             XCTAssertFalse(data.isEmpty)
+            XCTAssertEqual(data.count, image.size)
+            XCTAssertEqual((response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Length"), String(data.count))
+            XCTAssertEqual(images.first { $0.id == image.id }?.size, data.count)
+            XCTAssertEqual(renamed.size, data.count)
             try await client.delete(image)
             uploaded = nil
             let (_, missing) = try await probe.data(for: request)

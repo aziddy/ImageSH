@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import getRedis from '@/lib/redis';
+import getRedis, { getBufferByteLength } from '@/lib/redis';
 
 export async function GET() {
     try {
@@ -26,7 +26,9 @@ export async function GET() {
                     const parsedData = JSON.parse(data);
                     // Validate parsed data structure
                     if (parsedData && typeof parsedData === 'object' && parsedData.id) {
-                        images.push(parsedData);
+                        // Older metadata sometimes recorded the original upload size.
+                        const size = await getBufferByteLength(`image:${parsedData.id}:binary`);
+                        if (size !== null) images.push({ ...parsedData, size });
                     } else {
                         console.warn(`Invalid image data structure for key ${key}:`, parsedData);
                     }
@@ -52,4 +54,4 @@ export async function GET() {
             { status: 500 }
         );
     }
-} 
+}

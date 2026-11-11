@@ -1,6 +1,7 @@
 import { createClient } from 'redis';
 
 let redisClient: ReturnType<typeof createClient> | null = null;
+const BINARY_PREFIX = 'BINARY:';
 
 /*
 	Lazy Initizalization, because NextJS Build Process Runs 
@@ -53,8 +54,23 @@ export const setWithExpiry = async (key: string, value: string, ttl: number) => 
 export const setBufferWithExpiry = async (key: string, buffer: Buffer, ttl: number) => {
 	const client = await connectRedis();
 	// Store as base64 but mark it with a special prefix to differentiate from old format
-	const base64Data = `BINARY:${buffer.toString('base64')}`;
+	const base64Data = BINARY_PREFIX + buffer.toString('base64');
 	await client.set(key, base64Data, { EX: ttl });
+};
+
+// Measure decoded file bytes, excluding Redis's base64/prefix overhead. Only the
+// length and a few characters cross the network, even for large image libraries.
+export const getBufferByteLength = async (key: string): Promise<number | null> => {
+	const client = await connectRedis();
+	const [length, prefix, suffix] = await client.multi()
+		.strLen(key)
+		.getRange(key, 0, BINARY_PREFIX.length - 1)
+		.getRange(key, -2, -1)
+		.execTyped();
+	if (length === 0) return null;
+	const encodedLength = Number(length) - (prefix === BINARY_PREFIX ? BINARY_PREFIX.length : 0);
+	const padding = String(suffix).endsWith('==') ? 2 : String(suffix).endsWith('=') ? 1 : 0;
+	return Math.floor(encodedLength * 3 / 4) - padding;
 };
 
 // Helper function to get binary data
@@ -67,9 +83,9 @@ export const getBuffer = async (key: string): Promise<Buffer | null> => {
 		if (typeof result === 'string') {
 			try {
 				// Check if it's new format with BINARY: prefix
-				if (result.startsWith('BINARY:')) {
+				if (result.startsWith(BINARY_PREFIX)) {
 					// New format: remove prefix and decode base64
-					const base64Data = result.substring(7);
+					const base64Data = result.substring(BINARY_PREFIX.length);
 					return Buffer.from(base64Data, 'base64');
 				} else {
 					// Old format: direct base64 string
@@ -98,4 +114,4 @@ export const getBuffer = async (key: string): Promise<Buffer | null> => {
 // Export a function that ensures connection
 export default async function getRedis() {
 	return await connectRedis();
-} 
+}

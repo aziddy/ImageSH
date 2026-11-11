@@ -4,6 +4,15 @@ import UniformTypeIdentifiers
 @testable import ImageSH
 
 final class ImagePreparationTests: XCTestCase {
+    func testFileSizesMatchWebDecimalUnitsAndPrecision() {
+        let cases: [(Int, String)] = [
+            (0, "0 B"), (999, "999 B"), (1000, "1 KB"), (1024, "1.02 KB"),
+            (629848, "629.85 KB"), (1000000, "1 MB"), (1048576, "1.05 MB"),
+            (1719130, "1.72 MB"), (10485760, "10.49 MB"), (1000000000, "1 GB")
+        ]
+        for (bytes, expected) in cases { XCTAssertEqual(FileSize.string(bytes), expected) }
+    }
+
     private func fixture(type: UTType = .png, orientation: Int = 1, alpha: Bool = false) throws -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1; format.opaque = !alpha
@@ -28,6 +37,7 @@ final class ImagePreparationTests: XCTestCase {
         XCTAssertEqual(prepared.width, 80)
         XCTAssertTrue(prepared.converted)
         XCTAssertGreaterThan(prepared.byteCount, 0)
+        XCTAssertEqual(prepared.byteCount, try Data(contentsOf: prepared.fileURL).count)
     }
 
     func testPNGResizingPreservesTransparency() throws {
@@ -36,6 +46,7 @@ final class ImagePreparationTests: XCTestCase {
         XCTAssertEqual(prepared.mimeType, "image/png")
         XCTAssertEqual(prepared.width, 40)
         XCTAssertEqual(prepared.height, 20)
+        XCTAssertEqual(prepared.byteCount, try Data(contentsOf: prepared.fileURL).count)
         let source = CGImageSourceCreateWithURL(prepared.fileURL as CFURL, nil)!
         let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)!
         XCTAssertTrue([CGImageAlphaInfo.premultipliedFirst, .premultipliedLast, .first, .last].contains(cgImage.alphaInfo))
@@ -59,6 +70,7 @@ final class ImagePreparationTests: XCTestCase {
         let image = try ImportedImage.fromData(data, name: "photo.jpg")
         let prepared = try image.prepare(scale: 1)
         XCTAssertEqual(try Data(contentsOf: prepared.fileURL), data)
+        XCTAssertEqual(prepared.byteCount, data.count)
         XCTAssertFalse(prepared.converted)
     }
 

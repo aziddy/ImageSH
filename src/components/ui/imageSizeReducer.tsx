@@ -5,9 +5,10 @@ import { formatFileSize } from '@/lib/format';
 
 interface ImageSizeReducerProps {
     file: File;
-    /** Called with the resized file, or null when the original should be used (100%). */
+    /** Null means original at 100%, or no uploadable file while resizing/after failure. */
     onResizedFile: (resizedFile: File | null, percentage: number) => void;
     onDimensions?: (dimensions: ImageDimensions) => void;
+    disabled?: boolean;
 }
 
 export interface ImageDimensions {
@@ -17,17 +18,19 @@ export interface ImageDimensions {
 
 const ENCODABLE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSizeReducerProps) {
+export function ImageSizeReducer({ file, onResizedFile, onDimensions, disabled = false }: ImageSizeReducerProps) {
     const [percentage, setPercentage] = useState(100);
     const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [resizedSize, setResizedSize] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
     // Each resize gets an id so a slow, older result never overwrites a newer one.
     const requestRef = useRef(0);
 
     useEffect(() => {
+        const requests = requestRef;
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onload = () => {
@@ -36,9 +39,13 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
             setDimensions(next);
             onDimensions?.(next);
         };
+        img.onerror = () => setError('Couldn’t read this image’s dimensions.');
         img.src = url;
         return () => {
+            requests.current++;
+            imageRef.current = null;
             img.onload = null;
+            img.onerror = null;
             URL.revokeObjectURL(url);
         };
     }, [file, onDimensions]);
@@ -50,11 +57,13 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
             if (!img || !canvas || !dimensions) return;
 
             const request = ++requestRef.current;
+            setError(null);
+            // Invalidate the previous file immediately so Upload cannot send an old scale.
+            onResizedFile(null, scalePercent);
 
             if (scalePercent >= 100) {
                 setIsProcessing(false);
                 setResizedSize(null);
-                onResizedFile(null, 100);
                 return;
             }
 
@@ -67,7 +76,7 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
             const ctx = canvas.getContext('2d');
             if (!ctx) {
                 setIsProcessing(false);
-                onResizedFile(null, scalePercent);
+                setError('Couldn’t resize this image. Try another scale or use full size.');
                 return;
             }
             ctx.imageSmoothingEnabled = true;
@@ -76,14 +85,14 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
 
             // Canvas can't encode GIF, so animated or not, a resized GIF becomes a PNG.
             const outputType = ENCODABLE_TYPES.includes(file.type) ? file.type : 'image/png';
-            // Quality 0.85 matches the server's sharp settings, so the size shown is close to the final one.
+            // This measures the upload file. The server uses its own encoder afterward.
             canvas.toBlob(
                 (blob) => {
                     if (request !== requestRef.current) return;
                     setIsProcessing(false);
                     if (!blob) {
                         setResizedSize(null);
-                        onResizedFile(null, scalePercent);
+                        setError('Couldn’t resize this image. Try another scale or use full size.');
                         return;
                     }
                     setResizedSize(blob.size);
@@ -112,16 +121,15 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
 
     let summary = 'Reading image size…';
     if (dimensions) {
-        const width = Math.round((dimensions.width * percentage) / 100);
-        const height = Math.round((dimensions.height * percentage) / 100);
+        const width = Math.max(1, Math.round((dimensions.width * percentage) / 100));
+        const height = Math.max(1, Math.round((dimensions.height * percentage) / 100));
         if (percentage === 100) {
-            summary = `Full size, ${dimensions.width} × ${dimensions.height} px, ${formatFileSize(file.size)}.`;
-        } else {
-            const estimate = Math.round(file.size * ((width * height) / (dimensions.width * dimensions.height)));
-            const size = resizedSize !== null ? formatFileSize(resizedSize) : `about ${formatFileSize(estimate)}`;
-            summary = `${width} × ${height} px, ${size}. The server compresses it a little more.`;
+            summary = `Upload: ${dimensions.width} × ${dimensions.height} px, ${formatFileSize(file.size)}.`;
+        } else if (resizedSize !== null) {
+            summary = `Upload: ${width} × ${height} px, ${formatFileSize(resizedSize)}.`;
         }
     }
+    const shownSize = percentage === 100 ? file.size : resizedSize;
 
     return (
         <div className="flex flex-col gap-2">
@@ -139,12 +147,13 @@ export function ImageSizeReducer({ file, onResizedFile, onDimensions }: ImageSiz
                 step={5}
                 value={percentage}
                 onChange={handleChange}
-                disabled={!dimensions}
+                disabled={disabled || !dimensions}
                 className="h-6 w-full cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <p className="text-[13px] text-muted-foreground tabular-nums" aria-live="polite">
-                {isProcessing ? 'Resizing…' : summary}
+            <p className="text-[13px] text-muted-foreground tabular-nums" aria-live="polite" title={shownSize === null ? undefined : `${shownSize} bytes`}>
+                {error ?? (isProcessing ? 'Resizing…' : summary)}
             </p>
+            <p className="text-[13px] text-muted-foreground">The saved file size may change after server processing.</p>
             {mightBeHeicConverted && (
                 <p className="text-[13px] text-muted-foreground">
                     iPhone photos arrive as JPEG and can be larger than the original. Reducing the size helps.

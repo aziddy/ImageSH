@@ -55,7 +55,7 @@ NEXTAUTH_SECRET=your_nextauth_secret_here
 NEXTAUTH_URL=http://localhost:3000
 
 # App Configuration
-NEXT_PUBLIC_MAX_FILE_SIZE=10485760  # 10MB in bytes
+NEXT_PUBLIC_MAX_FILE_SIZE=10485760  # 10 MiB (10.49 MB), in bytes
 ```
 
 ## Running the Application
@@ -114,6 +114,8 @@ Pick how long the image lives in the "Lives for" menu, then:
 
 Images over the size limit can be scaled down with "Reduce size" until they fit.
 
+Web and iOS display decimal file sizes (1 KB = 1,000 bytes, 1 MB = 1,000,000 bytes), rounded to two decimal places. Before upload, the size describes the file being sent. Server processing can make the saved file smaller or larger. Library/API sizes describe the saved file and match the downloaded bytes; Redis's base64 storage overhead is excluded. Hover over a web library size, or open iOS image details, to see the exact byte count.
+
 ### Managing Images
 
 The admin page shows every live image as a thumbnail with a ring that drains as it nears expiry. The ring turns amber under a day and red under two hours. From each card you can:
@@ -168,7 +170,7 @@ docker exec -it <container-id> redis-cli ping
 ### Image Upload Failures
 
 Check:
-- File size is under the limit (default 10MB)
+- File size is under the limit (default 10,485,760 bytes / 10.49 MB)
 - File type is supported (JPEG, PNG, GIF, WebP)
 - Redis has enough memory
 

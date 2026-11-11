@@ -54,7 +54,7 @@ struct UploadComposer: View {
                         }.accessibilityLabel("Image scale")
                         if preparing { ProgressView("Resizing…") }
                         else if let prepared {
-                            Text("\(prepared.width) × \(prepared.height) px · \(ByteCountFormatter.string(fromByteCount: Int64(prepared.byteCount), countStyle: .file))")
+                            Text("Upload: \(prepared.width) × \(prepared.height) px · \(FileSize.string(prepared.byteCount)) (\(prepared.byteCount) bytes)")
                                 .font(.footnote).foregroundStyle(prepared.byteCount > AppConfiguration.maxUploadBytes ? .red : .secondary)
                             if prepared.converted {
                                 Text("Prepared as \(prepared.mimeType == "image/png" ? "PNG" : "JPEG"). Converted images are limited to 4096 px on the longest side.")
@@ -64,7 +64,9 @@ struct UploadComposer: View {
                                 ErrorMessage(message: APIError.tooLarge.localizedDescription)
                             }
                         }
-                    } footer: { Text("Images can be up to 10 MB. Your server may apply a different limit.") }
+                    } footer: {
+                        Text("Images can be up to \(FileSize.string(AppConfiguration.maxUploadBytes)). Your server may apply a different limit. The saved file size may change after server processing.")
+                    }
                     }.disabled(uploading)
                     if let errorMessage { Section { ErrorMessage(message: errorMessage) } }
                     if uploading {
