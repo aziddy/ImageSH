@@ -10,6 +10,8 @@ Upload a single image using **Take a Photo**, Photos, Files, or the Paste button
 
 After signing in once, open Photos, select one image, tap **Share**, and choose **ImageSH**. If it is not visible, use **More** to enable it. The extension uses the app's existing login and server settings.
 
+To change an existing upload’s expiration, open its **More actions** menu and choose **Change lifetime**. Select **Lives for**, review the new expiration, then **Save**. Durations are measured from the original upload date; choices that would already have expired are disabled. The share link stays the same. The server must support lifetime updates before installing this app version.
+
 HEIC images are converted to JPEG. Resized PNGs preserve transparency. Converted/resized images are limited to 4096 pixels on the longest side to keep sharing reliable on large iPhone photos. Original JPEG, PNG, GIF, and WebP uploads are passed through at 100% scale; the server applies its existing processing, including flattening GIFs. The app checks a 10,485,760-byte (10.49 MB) upload limit and displays any additional server validation errors. File sizes use the same decimal units and rounding as the website. Upload sizes describe the prepared file; image details show the saved file size, including its exact byte count.
 
 Uploads run while the editor is open. Failed uploads remain available for manual retry; there is no background queue. If a connection fails after sending the image, check the library before retrying because the server may have completed the upload.
@@ -55,7 +57,7 @@ Keep the default simulator code signing enabled: the shared Keychain tests requi
 
 ### Optional real-backend integration test
 
-`BackendIntegrationTests` exercises the real NextAuth and image routes against a disposable local Redis. It skips when the local test server is absent. It creates, renames, fetches, and deletes only its own temporary image. The test server overrides all credentials and Redis settings; it does not use production or `.env.local` credentials.
+`BackendIntegrationTests` exercises the real NextAuth and image routes against a disposable local Redis. It skips when the local test server is absent. It creates, renames, extends and shortens the lifetime of, fetches, and deletes only its own temporary image. The test server overrides all credentials and Redis settings; it does not use production or `.env.local` credentials.
 
 From the repository root, with Docker running:
 
@@ -76,6 +78,6 @@ xcrun simctl addmedia YOUR_SIMULATOR_UDID src/test-fixtures/images/1.png
 
 Stop the Node process and run `docker stop imagesh-ios-integration` afterward. The self-signed certificate and private key are generated under ignored `.build/`, expire after one day, and are used only for localhost. No TLS exceptions are added to the app.
 
-The optional UI integration test signs in to that local server, uploads the seeded photo, uploads another through Photos → Share → ImageSH, and deletes both images. It also skips when the local server is absent.
+The optional UI integration test signs in to that local server, uploads the seeded photo, changes its lifetime and verifies Save/Cancel behavior, uploads another through Photos → Share → ImageSH, and deletes both images. It also skips when the local server is absent.
 
 This setup is for direct device installation. TestFlight and App Store distribution require a separate distribution archive and submission.

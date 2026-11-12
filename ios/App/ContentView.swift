@@ -84,6 +84,7 @@ private struct LibraryView: View {
     @State private var sharing: ImageRecord?
     @State private var renaming: ImageRecord?
     @State private var newName = ""
+    @State private var changingLifetime: ImageRecord?
     @State private var deleting: ImageRecord?
     @State private var sort: SortOrder = .newest
     @State private var copiedID: String?
@@ -156,6 +157,9 @@ private struct LibraryView: View {
                 }
             }
             .sheet(isPresented: $showingSettings) { SettingsView() }
+            .sheet(item: $changingLifetime) { image in
+                NavigationStack { LifetimeEditor(image: image) }
+            }
             .sheet(item: $selected) { image in
                 NavigationStack {
                     ImageDetailView(image: image, client: client)
@@ -203,6 +207,7 @@ private struct LibraryView: View {
                         ShareLink(item: client.shareURL(for: image)) { Label("Share link", systemImage: "square.and.arrow.up") }
                         Button("Show QR code", systemImage: "qrcode") { sharing = image }
                         Button("Rename", systemImage: "pencil") { newName = image.displayName; renaming = image }
+                        Button("Change lifetime", systemImage: "clock") { changingLifetime = image }
                         Button("Delete", systemImage: "trash", role: .destructive) { deleting = image }
                     } label: { Image(systemName: "ellipsis").frame(width: 32, height: 32).contentShape(Rectangle()) }
                         .accessibilityLabel("More actions for \(image.displayName)")
@@ -211,6 +216,83 @@ private struct LibraryView: View {
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct LifetimeEditor: View {
+    let image: ImageRecord
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var lifetime: Lifetime?
+    @State private var saving = false
+    @State private var unavailable = false
+    @State private var errorMessage: String?
+
+    init(image: ImageRecord) {
+        self.image = image
+        _lifetime = State(initialValue: Lifetime.matching(uploadedAt: image.uploadedAt, expiresAt: image.expiresAt))
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Form {
+                Section {
+                    Text(image.displayName).fontWeight(.medium)
+                    LabeledContent("Uploaded", value: image.uploadedAt.formatted(date: .abbreviated, time: .shortened))
+                    LabeledContent("Current expiration", value: image.expiresAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                Section {
+                    Picker("Lives for", selection: $lifetime) {
+                        Text("Choose a duration").tag(nil as Lifetime?).disabled(true)
+                        ForEach(Lifetime.allCases) { option in
+                            Text(option.label).tag(Optional(option))
+                                .disabled(option.expiration(from: image.uploadedAt) <= context.date)
+                        }
+                    }.accessibilityIdentifier("lifetimePicker")
+                    if let proposed = lifetime?.expiration(from: image.uploadedAt) {
+                        LabeledContent("New expiration") {
+                            Text(proposed.formatted(date: .abbreviated, time: .shortened))
+                                .accessibilityIdentifier("newExpiration")
+                        }
+                    }
+                } footer: {
+                    Text("Measured from the original upload date. Durations that would already have expired are unavailable. Your share link stays the same.")
+                }
+                if let errorMessage { Section { ErrorMessage(message: errorMessage).accessibilityIdentifier("lifetimeError") } }
+                if saving { Section { ProgressView("Saving…") } }
+            }
+            .disabled(saving || unavailable)
+            .navigationTitle("Change lifetime").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .disabled(saving || unavailable || !canSave(at: context.date))
+                        .accessibilityIdentifier("saveLifetimeButton")
+                }
+            }
+        }
+        .interactiveDismissDisabled(saving)
+        .onChange(of: lifetime) { _, _ in errorMessage = nil }
+    }
+
+    private func canSave(at date: Date) -> Bool {
+        guard let lifetime, image.expiresAt > date else { return false }
+        return lifetime != Lifetime.matching(uploadedAt: image.uploadedAt, expiresAt: image.expiresAt)
+            && lifetime.expiration(from: image.uploadedAt) > date
+    }
+
+    private func save() {
+        guard let lifetime, !saving, !unavailable, canSave(at: .now) else { return }
+        saving = true; errorMessage = nil
+        Task {
+            do { try await model.changeLifetime(image, to: lifetime); dismiss() }
+            catch {
+                errorMessage = error.localizedDescription
+                unavailable = error as? APIError == .notFound
+            }
+            saving = false
+        }
     }
 }
 

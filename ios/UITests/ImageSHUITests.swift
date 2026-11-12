@@ -105,6 +105,31 @@ final class ImageSHUITests: XCTestCase {
         capture(app, name: "Native upload and QR code")
         app.buttons["Done"].tap()
 
+        let nativeMenu = app.buttons["More actions for \(name)"]
+        XCTAssertTrue(nativeMenu.waitForExistence(timeout: 10), app.debugDescription)
+        nativeMenu.tap(); app.buttons["Change lifetime"].tap()
+        let saveLifetime = app.buttons["saveLifetimeButton"]
+        XCTAssertTrue(saveLifetime.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(saveLifetime.isEnabled)
+        let originalExpiration = app.staticTexts["newExpiration"].label
+        app.buttons["lifetimePicker"].tap(); app.buttons["7 days"].tap()
+        XCTAssertTrue(saveLifetime.isEnabled)
+        XCTAssertNotEqual(app.staticTexts["newExpiration"].label, originalExpiration)
+        capture(app, name: "Change existing upload lifetime")
+        saveLifetime.tap()
+        XCTAssertTrue(nativeMenu.waitForExistence(timeout: 10))
+        nativeMenu.tap(); app.buttons["Change lifetime"].tap()
+        XCTAssertTrue(saveLifetime.waitForExistence(timeout: 5))
+        XCTAssertFalse(saveLifetime.isEnabled)
+        XCTAssertTrue(app.buttons["lifetimePicker"].label.contains("7 days"), app.debugDescription)
+        app.buttons["lifetimePicker"].tap(); app.buttons["3 days"].tap()
+        app.buttons["Cancel"].tap()
+        nativeMenu.tap(); app.buttons["Change lifetime"].tap()
+        XCTAssertTrue(saveLifetime.waitForExistence(timeout: 5))
+        XCTAssertFalse(saveLifetime.isEnabled)
+        XCTAssertTrue(app.buttons["lifetimePicker"].label.contains("7 days"), app.debugDescription)
+        app.buttons["Cancel"].tap()
+
         // Exercise the actual share extension hosted by Photos, including its shared login.
         let photos = XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")
         photos.launch()

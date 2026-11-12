@@ -120,10 +120,12 @@ Web and iOS display decimal file sizes (1 KB = 1,000 bytes, 1 MB = 1,000,000 byt
 
 The admin page shows every live image as a thumbnail with a ring that drains as it nears expiry. The ring turns amber under a day and red under two hours. From each card you can:
 - Copy the share link
-- Open the image, show its QR code, rename it, or delete it from the "More actions" menu
+- Open the image, show its QR code, rename it, change its lifetime, or delete it from the "More actions" menu
 - Sort by newest, soonest to expire, or name
 
 Use the moon/sun button in the header to switch between light and dark themes.
+
+Choose **Change lifetime** on the website or iPhone to edit an existing upload’s **Lives for** setting. The duration is measured from the original upload date, and the editor previews the resulting expiration. Durations that would already have expired are unavailable. Saving updates both the image and metadata expiration while keeping the same share link. Months use fixed 30-, 90-, and 180-day durations.
 
 ### Sharing Images
 
@@ -143,8 +145,26 @@ Share the generated URLs with anyone. Images are publicly accessible via their u
 
 - `POST /api/admin/upload` - Upload new image (protected)
 - `GET /api/admin/images` - List all images (protected)
+- `PATCH /api/admin/images/[id]` - Update name and/or lifetime (protected); accepts `{ "name": "New name", "expiration": "7d" }` with either field optional, and returns `{ "success": true, "imageData": ... }`
 - `DELETE /api/admin/images/[id]` - Delete specific image (protected)
 - `GET /i/[id]` - Public route to view images
+
+### Tests
+
+Run `npm test` for upload, formatting, lifetime calculation, and update validation checks. To also test atomic expiration, concurrent edits, legacy binary sizes, and actual deletion at expiry, run a disposable local Redis and opt in explicitly:
+
+```sh
+docker run --rm -d --name imagesh-lifetime-tests \
+  -p 127.0.0.1:16384:6379 redis:7-alpine \
+  redis-server --appendonly no --save '' --requirepass imagesh-integration-only
+
+IMAGESH_TEST_REDIS_URL=redis://127.0.0.1:16384 \
+IMAGESH_TEST_REDIS_PASSWORD=imagesh-integration-only npm test
+
+docker stop imagesh-lifetime-tests
+```
+
+The integration tests accept only a local Redis address and remove only their own temporary keys. See [iPhone tests](ios/README.md#tests) for native API, UI, and real-backend checks. Deploy the server and website changes before distributing an iPhone build that edits lifetimes; existing apps keep their upload and rename behavior.
 
 ### Security
 

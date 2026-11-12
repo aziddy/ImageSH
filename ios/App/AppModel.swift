@@ -73,6 +73,18 @@ import SwiftUI
         catch { handle(error); if error as? APIError == .notFound { images.removeAll { $0.id == image.id } } }
     }
 
+    func changeLifetime(_ image: ImageRecord, to lifetime: Lifetime) async throws {
+        guard let client else { throw APIError.unauthenticated }
+        do {
+            let updated = try await client.changeLifetime(image, to: lifetime)
+            if let index = images.firstIndex(where: { $0.id == image.id }) { images[index] = updated }
+        } catch {
+            if error as? APIError == .unauthenticated { sessionExpired() }
+            if error as? APIError == .notFound { images.removeAll { $0.id == image.id } }
+            throw error
+        }
+    }
+
     func signOut() async {
         let oldClient = client
         do { try vault.clear() }

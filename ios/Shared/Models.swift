@@ -4,6 +4,22 @@ enum Lifetime: String, CaseIterable, Identifiable, Codable {
     case twoHours = "2h", oneDay = "1d", threeDays = "3d", sevenDays = "7d"
     case oneMonth = "1m", threeMonths = "3m", sixMonths = "6m", oneYear = "1y"
     var id: String { rawValue }
+    var duration: TimeInterval {
+        switch self {
+        case .twoHours: 2 * 60 * 60
+        case .oneDay: 24 * 60 * 60
+        case .threeDays: 3 * 24 * 60 * 60
+        case .sevenDays: 7 * 24 * 60 * 60
+        case .oneMonth: 30 * 24 * 60 * 60
+        case .threeMonths: 90 * 24 * 60 * 60
+        case .sixMonths: 180 * 24 * 60 * 60
+        case .oneYear: 365 * 24 * 60 * 60
+        }
+    }
+    func expiration(from uploadedAt: Date) -> Date { uploadedAt.addingTimeInterval(duration) }
+    static func matching(uploadedAt: Date, expiresAt: Date) -> Lifetime? {
+        allCases.first { abs($0.expiration(from: uploadedAt).timeIntervalSince(expiresAt)) <= 1 }
+    }
     var label: String {
         switch self {
         case .twoHours: "2 hours"

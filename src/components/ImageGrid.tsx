@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ImageCard from '@/components/ImageCard';
+import LifetimeEditor from '@/components/LifetimeEditor';
 import { useNow } from '@/hooks/useNow';
 import { shareUrlFor, type ImageData } from '@/lib/format';
 
@@ -37,6 +38,7 @@ export default function ImageGrid({ refreshKey, onShare }: ImageGridProps) {
     const [sort, setSort] = useState<SortOrder>('newest');
     const [renameTarget, setRenameTarget] = useState<ImageData | null>(null);
     const [newName, setNewName] = useState('');
+    const [lifetimeTarget, setLifetimeTarget] = useState<ImageData | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<ImageData | null>(null);
     const [isWorking, setIsWorking] = useState(false);
     const [fetchedAt, setFetchedAt] = useState(0);
@@ -197,10 +199,26 @@ export default function ImageGrid({ refreshKey, onShare }: ImageGridProps) {
                             onCopy={copyLink}
                             onShare={onShare}
                             onRename={openRename}
+                            onChangeLifetime={setLifetimeTarget}
                             onDelete={setDeleteTarget}
                         />
                     ))}
                 </div>
+            )}
+
+            {lifetimeTarget && (
+                <LifetimeEditor
+                    key={lifetimeTarget.id}
+                    image={lifetimeTarget}
+                    onClose={() => setLifetimeTarget(null)}
+                    onMissing={() => setImages((current) => current.filter((image) => image.id !== lifetimeTarget.id))}
+                    onUpdated={(updated) => {
+                        setImages((current) => current.map((image) => image.id === updated.id ? updated : image));
+                        setFetchedAt(Date.now());
+                        setLifetimeTarget(null);
+                        toast.success('Lifetime updated');
+                    }}
+                />
             )}
 
             <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>

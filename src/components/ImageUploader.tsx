@@ -5,7 +5,7 @@ import { ClipboardPaste, Download, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import LifetimeSelect from '@/components/LifetimeSelect';
 import { ImageSizeReducer, type ImageDimensions } from '@/components/ui/imageSizeReducer';
 import type { CopyState } from '@/components/ShareSheet';
 import { cn } from '@/lib/utils';
@@ -14,17 +14,6 @@ import { formatFileSize, shareUrlFor, type ImageData } from '@/lib/format';
 const VALID_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_SIZE = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760', 10);
 const MAX_SIZE_LABEL = formatFileSize(MAX_SIZE);
-
-const LIFETIMES = [
-    { value: '2h', label: '2 hours' },
-    { value: '1d', label: '1 day' },
-    { value: '3d', label: '3 days' },
-    { value: '7d', label: '7 days' },
-    { value: '1m', label: '1 month' },
-    { value: '3m', label: '3 months' },
-    { value: '6m', label: '6 months' },
-    { value: '1y', label: '1 year' },
-];
 
 interface UploadResponse {
     success: boolean;
@@ -36,23 +25,6 @@ interface UploadResponse {
 
 const noopSubscribe = () => () => {};
 const canReadClipboard = () => typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function';
-
-function LifetimeSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-    return (
-        <Select value={value} onValueChange={onChange}>
-            <SelectTrigger id="lifetime" className="w-36">
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                {LIFETIMES.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
-    );
-}
 
 export default function ImageUploader({
     onUploaded,

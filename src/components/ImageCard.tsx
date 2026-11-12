@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, MoreHorizontal, Pencil, QrCode, Trash2 } from 'lucide-react';
+import { Check, Clock, Copy, ExternalLink, MoreHorizontal, Pencil, QrCode, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -20,10 +20,11 @@ interface ImageCardProps {
     onCopy: (image: ImageData) => Promise<boolean>;
     onShare: (image: ImageData) => void;
     onRename: (image: ImageData) => void;
+    onChangeLifetime: (image: ImageData) => void;
     onDelete: (image: ImageData) => void;
 }
 
-export default function ImageCard({ image, now, onCopy, onShare, onRename, onDelete }: ImageCardProps) {
+export default function ImageCard({ image, now, onCopy, onShare, onRename, onChangeLifetime, onDelete }: ImageCardProps) {
     const [copied, setCopied] = useState(false);
     const lifetime = getLifetime(image.uploadedAt, image.expiresAt, now);
     const viewerHref = `/i/${image.id}`;
@@ -95,6 +96,10 @@ export default function ImageCard({ image, now, onCopy, onShare, onRename, onDel
                             <DropdownMenuItem onSelect={() => onRename(image)}>
                                 <Pencil />
                                 Rename
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => onChangeLifetime(image)}>
+                                <Clock />
+                                Change lifetime
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem variant="destructive" onSelect={() => onDelete(image)}>

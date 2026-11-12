@@ -3,25 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-import ts from 'typescript';
 import sharp from 'sharp';
+import { loadSource } from './helpers/load-source.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const runtimeRequire = createRequire(import.meta.url);
-
-// Run the actual route code with isolated auth/storage, without a live account or Redis.
-function loadSource(path, overrides = {}) {
-    const filename = resolve(root, path);
-    const { outputText } = ts.transpileModule(readFileSync(filename, 'utf8'), {
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
-    });
-    const loaded = { exports: {} };
-    new Function('require', 'module', 'exports', outputText)(
-        name => Object.hasOwn(overrides, name) ? overrides[name] : runtimeRequire(name), loaded, loaded.exports,
-    );
-    return loaded.exports;
-}
 
 test('file size formatting uses decimal units and the same precision as iOS', () => {
     const { formatFileSize } = loadSource('src/lib/format.ts');
@@ -81,7 +66,6 @@ test('reported sizes equal downloadable bytes, including legacy metadata and bas
     const upload = loadSource('src/app/api/admin/upload/route.ts', overrides).POST;
     const list = loadSource('src/app/api/admin/images/route.ts', overrides).GET;
     const download = loadSource('src/app/api/i/[id]/route.ts', overrides).GET;
-    const rename = loadSource('src/app/api/admin/images/[id]/route.ts', overrides).PATCH;
 
     await t.test('storage size handles padding, old base64 and absent keys', async () => {
         assert.equal(await storage.getBufferByteLength('missing'), null);
@@ -125,11 +109,8 @@ test('reported sizes equal downloadable bytes, including legacy metadata and bas
             await redis.set(`image:${image.id}:binary`, body.toString('base64'));
             const { images } = await (await list()).json();
             assert.equal(images.find(record => record.id === image.id).size, body.length);
-            const renamed = await rename(new Request('http://image-size-test.invalid/api/admin/images/' + image.id, {
-                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Renamed' }),
-            }), context);
-            assert.equal((await renamed.json()).imageData.size, body.length);
-            assert.equal(JSON.parse(await redis.get(`image:${image.id}:data`)).size, body.length);
+            // PATCH's stored-size correction is exercised against its actual Lua
+            // operation in lifetimes.test.mjs, rather than emulating Lua here.
         });
     }
 });

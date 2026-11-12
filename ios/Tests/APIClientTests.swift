@@ -162,6 +162,61 @@ final class MockURLProtocol: URLProtocol {
         XCTAssertEqual(image.fractionRemaining(at: image.expiresAt.addingTimeInterval(1)), 0)
     }
 
+    func testLifetimePresetsUseFixedDurationsFromOriginalUpload() {
+        // This timestamp crosses the end of daylight saving time in Chicago.
+        let uploadedAt = ISO8601DateFormatter().date(from: "2026-11-01T01:30:00-05:00")!
+        let durations: [TimeInterval] = [7200, 86400, 259200, 604800, 2592000, 7776000, 15552000, 31536000]
+        for (lifetime, expected) in zip(Lifetime.allCases, durations) {
+            XCTAssertEqual(lifetime.duration, expected)
+            let expiresAt = lifetime.expiration(from: uploadedAt)
+            XCTAssertEqual(expiresAt.timeIntervalSince(uploadedAt), expected)
+            XCTAssertEqual(Lifetime.matching(uploadedAt: uploadedAt, expiresAt: expiresAt), lifetime)
+            XCTAssertEqual(Lifetime.matching(uploadedAt: uploadedAt, expiresAt: expiresAt.addingTimeInterval(0.999)), lifetime)
+        }
+        XCTAssertNil(Lifetime.matching(uploadedAt: uploadedAt, expiresAt: uploadedAt.addingTimeInterval(2 * 86400)))
+        XCTAssertLessThan(Lifetime.oneDay.expiration(from: uploadedAt), uploadedAt.addingTimeInterval(2 * 86400))
+    }
+
+    private func lifetimeFixture() throws -> ImageRecord {
+        try ImageJSON.decoder().decode(ImageRecord.self, from: Data(#"{"id":"abc_123-xy","originalName":"photo.jpg","customName":null,"displayName":"photo.jpg","mimeType":"image/jpeg","size":128,"uploadedAt":"2026-11-10T12:00:00.000Z","uploadedBy":"admin","expiresAt":"2026-11-17T12:00:00.000Z"}"#.utf8))
+    }
+
+    func testChangingLifetimeSendsPresetAndDecodesUpdatedImageWithoutChangingLink() async throws {
+        let vault = MemoryVault(); seed(vault)
+        let client = try makeClient(vault: vault)
+        let image = try lifetimeFixture()
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        var responseImage = try JSONSerialization.jsonObject(with: encoder.encode(image)) as! [String: Any]
+        responseImage["expiresAt"] = "2026-12-10T12:00:00.000Z"
+        let response = try JSONSerialization.data(withJSONObject: ["success": true, "imageData": responseImage])
+        MockURLProtocol.handler = { request in
+            XCTAssertEqual(request.url!.path, "/api/admin/images/abc_123-xy")
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+            XCTAssertEqual(try JSONDecoder().decode([String: String].self, from: Self.readBody(request)), ["expiration": "1m"])
+            return (200, [:], response)
+        }
+        let updated = try await client.changeLifetime(image, to: .oneMonth)
+        XCTAssertEqual(updated.uploadedAt, image.uploadedAt)
+        XCTAssertEqual(updated.expiresAt, Lifetime.oneMonth.expiration(from: image.uploadedAt))
+        XCTAssertEqual(updated.id, image.id)
+        XCTAssertEqual(updated.size, image.size)
+        XCTAssertEqual(client.shareURL(for: updated), client.shareURL(for: image))
+    }
+
+    func testChangingLifetimeSurfacesValidationAndExpiredImageErrors() async throws {
+        for (status, expected) in [(400, APIError.server("Choose a lifetime that expires in the future.")), (404, .notFound), (401, .unauthenticated)] {
+            let vault = MemoryVault(); seed(vault)
+            let client = try makeClient(vault: vault)
+            MockURLProtocol.handler = { _ in
+                (status, [:], Data(#"{"error":"Choose a lifetime that expires in the future."}"#.utf8))
+            }
+            do { _ = try await client.changeLifetime(lifetimeFixture(), to: .twoHours); XCTFail("Expected update failure") }
+            catch { XCTAssertEqual(error as? APIError, expected) }
+            XCTAssertEqual(client.hasSession, status != 401)
+        }
+    }
+
     func testServerAddressRequiresHTTPSAndRootOrigin() throws {
         XCTAssertEqual(try AppConfiguration.serverURL(from: " https://imagesh.alexzidros.com/ ").absoluteString, "https://imagesh.alexzidros.com")
         XCTAssertEqual(try AppConfiguration.serverURL(from: "imagesh.alexzidros.com").scheme, "https")

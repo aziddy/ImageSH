@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import getRedis, { getBufferByteLength } from '@/lib/redis';
+import getRedis from '@/lib/redis';
+import { applyImageUpdate } from '@/lib/image-updates';
+import { expirationFor, getLifetimeOption } from '@/lib/lifetimes';
 
 export async function PATCH(
     request: NextRequest,
@@ -14,62 +16,56 @@ export async function PATCH(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Get Redis client
-        const redis = await getRedis();
-
-        const { id: imageId } = await context.params;
-        const { name } = await request.json();
-
-        if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        let body;
+        try { body = await request.json(); }
+        catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return NextResponse.json({ error: 'Provide a name or lifetime to update' }, { status: 400 });
+        }
+        const { name, expiration } = body;
+        if (name === undefined && expiration === undefined) {
+            return NextResponse.json({ error: 'Provide a name or lifetime to update' }, { status: 400 });
+        }
+        if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
             return NextResponse.json({ error: 'Valid name is required' }, { status: 400 });
         }
-
-        // Get existing image data
-        const imageDataStr = await redis.get(`image:${imageId}:data`);
-        if (!imageDataStr) {
-            return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+        if (expiration !== undefined && !getLifetimeOption(expiration)) {
+            return NextResponse.json({ error: 'Choose a valid lifetime' }, { status: 400 });
         }
 
-        let imageData;
-        try {
-            imageData = JSON.parse(imageDataStr);
-        } catch (parseError) {
-            console.error('Failed to parse image data:', parseError);
-            return NextResponse.json({ error: 'Invalid image data format' }, { status: 500 });
+        const redis = await getRedis();
+        const { id: imageId } = await context.params;
+        const patch: Parameters<typeof applyImageUpdate>[2] = {};
+        if (name !== undefined) patch.name = name.trim();
+        if (expiration !== undefined) {
+            const raw = await redis.get(`image:${imageId}:data`);
+            if (!raw) return NextResponse.json({ error: 'This image has expired or was deleted.' }, { status: 404 });
+            const image = JSON.parse(raw);
+            if (!image || typeof image.uploadedAt !== 'string' || !Number.isFinite(Date.parse(image.uploadedAt))
+                || typeof image.expiresAt !== 'string' || !Number.isFinite(Date.parse(image.expiresAt))) {
+                return NextResponse.json({ error: 'Invalid image data format' }, { status: 500 });
+            }
+            const now = Date.now();
+            if (Date.parse(image.expiresAt) <= now) {
+                return NextResponse.json({ error: 'This image has expired or was deleted.' }, { status: 404 });
+            }
+            const expiresAtMs = expirationFor(image.uploadedAt, expiration);
+            if (expiresAtMs <= now) {
+                return NextResponse.json({ error: 'Choose a lifetime that expires in the future.' }, { status: 400 });
+            }
+            patch.uploadedAt = image.uploadedAt;
+            patch.expiresAt = new Date(expiresAtMs).toISOString();
+            patch.expiresAtMs = expiresAtMs;
         }
 
-        // Validate parsed data structure
-        if (!imageData || typeof imageData !== 'object') {
-            console.error('Invalid image data structure:', imageData);
-            return NextResponse.json({ error: 'Invalid image data structure' }, { status: 500 });
-        }
-
-        const size = await getBufferByteLength(`image:${imageId}:binary`);
-        if (size === null) {
-            return NextResponse.json({ error: 'Image binary not found' }, { status: 404 });
-        }
-
-        // Return the same file size as listing and downloading, including older images.
-        imageData.size = size;
-        imageData.customName = name.trim();
-        imageData.displayName = name.trim();
-
-        // Update in Redis (keep the same TTL)
-        const ttl = await redis.ttl(`image:${imageId}:data`);
-        if (ttl > 0) {
-            await redis.setEx(`image:${imageId}:data`, ttl, JSON.stringify(imageData));
-        } else {
-            await redis.set(`image:${imageId}:data`, JSON.stringify(imageData));
-        }
-
-        return NextResponse.json({
-            success: true,
-            imageData
-        });
+        const result = await applyImageUpdate(redis, imageId, patch);
+        return result.status === 200
+            ? NextResponse.json({ success: true, imageData: result.imageData })
+            : NextResponse.json({ error: result.error }, { status: result.status });
     } catch (error) {
-        console.error('Update image name error:', error);
+        console.error('Update image error:', error);
         return NextResponse.json(
-            { error: 'Failed to update image name' },
+            { error: 'Failed to update image' },
             { status: 500 }
         );
     }

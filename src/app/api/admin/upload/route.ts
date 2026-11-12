@@ -5,6 +5,7 @@ import { setWithExpiry, setBufferWithExpiry } from '@/lib/redis';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 import { formatFileSize } from '@/lib/format';
+import { getLifetimeOption } from '@/lib/lifetimes';
 
 const MAX_FILE_SIZE = parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '10485760');
 
@@ -81,18 +82,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate TTL
-        const ttlMap: { [key: string]: number } = {
-            '2h': 2 * 60 * 60,
-            '1d': 24 * 60 * 60,
-            '3d': 3 * 24 * 60 * 60,
-            '7d': 7 * 24 * 60 * 60,
-            '1m': 30 * 24 * 60 * 60,
-            '3m': 90 * 24 * 60 * 60,
-            '6m': 180 * 24 * 60 * 60,
-            '1y': 365 * 24 * 60 * 60,
-        };
-
-        const ttl = ttlMap[expiration] || ttlMap['1d'];
+        const ttl = (getLifetimeOption(expiration) ?? getLifetimeOption('1d')!).seconds;
 
         // Store in Redis
         // Use actual processed image size, not original uploaded size

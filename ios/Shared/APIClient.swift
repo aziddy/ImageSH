@@ -113,7 +113,15 @@ final class RequestDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendab
         let body = try JSONEncoder().encode(["name": name.trimmingCharacters(in: .whitespacesAndNewlines)])
         let (data, _) = try await request("api/admin/images/" + safeID(image.id), method: "PATCH", body: body,
                                         contentType: "application/json")
-        return try ImageJSON.decoder().decode(RenameResponse.self, from: data).imageData
+        return try ImageJSON.decoder().decode(ImageUpdateResponse.self, from: data).imageData
+    }
+
+    func changeLifetime(_ image: ImageRecord, to lifetime: Lifetime) async throws -> ImageRecord {
+        try requireSession()
+        let body = try JSONEncoder().encode(["expiration": lifetime.rawValue])
+        let (data, _) = try await request("api/admin/images/" + safeID(image.id), method: "PATCH", body: body,
+                                        contentType: "application/json")
+        return try ImageJSON.decoder().decode(ImageUpdateResponse.self, from: data).imageData
     }
 
     func delete(_ image: ImageRecord) async throws {
@@ -220,6 +228,6 @@ private struct AuthSession: Decodable {
     let user: User?
 }
 private struct ImagesResponse: Decodable { let images: [ImageRecord] }
-private struct RenameResponse: Decodable { let imageData: ImageRecord }
+private struct ImageUpdateResponse: Decodable { let imageData: ImageRecord }
 private struct UploadResponse: Decodable { let image: ImageRecord }
 private struct ErrorResponse: Decodable { let error: String }
