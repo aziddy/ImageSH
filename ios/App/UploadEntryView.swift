@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
 import UniformTypeIdentifiers
 
 struct UploadEntryView: View {
@@ -7,7 +8,10 @@ struct UploadEntryView: View {
     let onUploaded: (ImageRecord) -> Void
     let onAuthenticationExpired: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var source: ImportedImage?
+    @State private var showingCamera = false
+    @State private var showingCameraPermissionAlert = false
     @State private var showingPhotos = false
     @State private var showingFiles = false
     @State private var importing = false
@@ -24,11 +28,12 @@ struct UploadEntryView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Image(systemName: "photo.badge.plus").font(.system(size: 36))
                             Text("Pick an image").font(.title2.bold())
-                            Text("Choose a photo, browse Files, or paste an image from your clipboard.")
+                            Text("Take a photo, choose from Photos or Files, or paste an image from your clipboard.")
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }.padding(.vertical, 12)
                     }
                     Section {
+                        Button("Take a Photo", systemImage: "camera") { Task { await openCamera() } }
                         Button("Choose from Photos", systemImage: "photo.on.rectangle") { showingPhotos = true }
                         Button("Choose from Files", systemImage: "folder") { showingFiles = true }
                         PasteButton(supportedContentTypes: [.image]) { providers in
@@ -42,6 +47,22 @@ struct UploadEntryView: View {
                 .navigationTitle("Upload image").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             }
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraPicker { result in
+                showingCamera = false
+                guard let result else { return }
+                do { load(try result.get()) }
+                catch { errorMessage = error.localizedDescription }
+            }.ignoresSafeArea()
+        }
+        .alert("Allow Camera Access", isPresented: $showingCameraPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Enable camera access for ImageSH in Settings to take a photo.")
         }
         .sheet(isPresented: $showingPhotos) {
             PhotoPicker { provider in
@@ -67,6 +88,42 @@ struct UploadEntryView: View {
         }
     }
 
+    @MainActor private func openCamera() async {
+        guard !importing else { return }
+        errorMessage = nil
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            errorMessage = "The camera is unavailable on this device. Choose an image from Photos or Files instead."
+            return
+        }
+        importing = true
+        defer { importing = false }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showingCamera = true
+        case .notDetermined:
+            if await AVCaptureDevice.requestAccess(for: .video) { showingCamera = true }
+            else { showingCameraPermissionAlert = true }
+        case .denied:
+            showingCameraPermissionAlert = true
+        case .restricted:
+            errorMessage = "Camera access is restricted on this device. Choose an image from Photos or Files instead."
+        @unknown default:
+            errorMessage = "Camera access is unavailable. Choose an image from Photos or Files instead."
+        }
+    }
+
+    private func load(_ image: UIImage) {
+        importing = true; errorMessage = nil
+        Task {
+            do {
+                source = try await Task.detached(priority: .userInitiated) {
+                    try ImportedImage.fromImage(image, name: "Camera photo.jpg")
+                }.value
+            } catch { errorMessage = error.localizedDescription }
+            importing = false
+        }
+    }
+
     private func load(_ provider: NSItemProvider) {
         importing = true; errorMessage = nil
         Task {
@@ -74,6 +131,31 @@ struct UploadEntryView: View {
             catch { errorMessage = error.localizedDescription }
             importing = false
         }
+    }
+}
+
+private struct CameraPicker: UIViewControllerRepresentable {
+    // A nil result means the user cancelled without taking a photo.
+    let onSelect: (Result<UIImage, Error>?) -> Void
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.mediaTypes = [UTType.image.identifier]
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(onSelect: onSelect) }
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onSelect: (Result<UIImage, Error>?) -> Void
+        init(onSelect: @escaping (Result<UIImage, Error>?) -> Void) { self.onSelect = onSelect }
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage { onSelect(.success(image)) }
+            else { onSelect(.failure(ImageImportError.unreadable)) }
+        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { onSelect(nil) }
     }
 }
 

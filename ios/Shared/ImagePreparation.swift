@@ -9,7 +9,7 @@ enum ImageImportError: LocalizedError {
         switch self {
         case .unsupported: "Choose a JPEG, PNG, HEIC, GIF, or WebP image."
         case .unreadable: "This image couldn’t be opened. Try exporting it from Photos or choosing another file."
-        case .encoding: "This image couldn’t be resized. Try choosing another image."
+        case .encoding: "This image couldn’t be prepared. Try choosing another image."
         }
     }
 }
@@ -55,6 +55,11 @@ final class ImportedImage: Identifiable, @unchecked Sendable {
             try? FileManager.default.removeItem(at: directory)
             throw error
         }
+    }
+
+    static func fromImage(_ image: UIImage, name: String) throws -> ImportedImage {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { throw ImageImportError.encoding }
+        return try fromData(data, name: name)
     }
 
     func prepare(scale: Double) throws -> PreparedImage {

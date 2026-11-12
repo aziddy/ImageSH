@@ -6,7 +6,7 @@ Native SwiftUI app and Photos share extension for the existing ImageSH server. R
 
 The server address defaults to **https://imagesh.alexzidros.com**. Sign in with the same admin username and password as the website. You can change servers in Settings.
 
-Upload a single image from Photos, Files, or the Paste button. Choose a name and expiration, optionally reduce the size, then upload. The link is copied after a successful upload; you can also share it or display its QR code. The library supports sorting, previewing, renaming, and deleting images.
+Upload a single image using **Take a Photo**, Photos, Files, or the Paste button. Taking a photo requests camera access and opens the system camera; after choosing **Use Photo**, the captured JPEG opens in the same upload editor. If access was denied, **Open Settings** lets you enable it. Choose a name and expiration, optionally reduce the size, then upload. The link is copied after a successful upload; you can also share it or display its QR code. The library supports sorting, previewing, renaming, and deleting images.
 
 After signing in once, open Photos, select one image, tap **Share**, and choose **ImageSH**. If it is not visible, use **More** to enable it. The extension uses the app's existing login and server settings.
 

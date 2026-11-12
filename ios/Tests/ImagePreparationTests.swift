@@ -74,6 +74,30 @@ final class ImagePreparationTests: XCTestCase {
         XCTAssertFalse(prepared.converted)
     }
 
+    func testCameraPhotosPreservePortraitAndMirroredOrientation() throws {
+        let pixels = try XCTUnwrap(UIImage(data: fixture(type: .jpeg))?.cgImage)
+        for (orientation, exifOrientation) in [(UIImage.Orientation.right, 6), (.leftMirrored, 5)] {
+            let photo = UIImage(cgImage: pixels, scale: 1, orientation: orientation)
+            let image = try ImportedImage.fromImage(photo, name: "Camera photo.jpg")
+            let encoded = try XCTUnwrap(CGImageSourceCreateWithURL(image.fileURL as CFURL, nil))
+            let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(encoded, 0, nil) as? [CFString: Any])
+            XCTAssertEqual(properties[kCGImagePropertyOrientation] as? Int, exifOrientation)
+            let original = try image.prepare(scale: 1)
+            XCTAssertEqual(original.mimeType, "image/jpeg")
+            XCTAssertEqual((original.filename as NSString).deletingPathExtension, "Camera photo")
+            XCTAssertEqual(UTType(filenameExtension: (original.filename as NSString).pathExtension), .jpeg)
+            XCTAssertEqual(original.width, 40)
+            XCTAssertEqual(original.height, 80)
+            XCTAssertEqual(original.preview.size.width, 40)
+            XCTAssertEqual(original.preview.size.height, 80)
+            XCTAssertGreaterThan(original.byteCount, 0)
+
+            let resized = try image.prepare(scale: 0.5)
+            XCTAssertEqual(resized.width, 20)
+            XCTAssertEqual(resized.height, 40)
+        }
+    }
+
     func testUnsupportedFileIsRejected() {
         XCTAssertThrowsError(try ImportedImage.fromData(Data("not an image".utf8), name: "fake.png"))
     }

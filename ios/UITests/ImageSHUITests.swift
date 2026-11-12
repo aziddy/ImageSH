@@ -44,6 +44,9 @@ final class ImageSHUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ImageSHUITesting", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["IMAGESH_TEST_SERVER"] = "https://localhost:3443"
+        #if targetEnvironment(simulator)
+        app.resetAuthorizationStatus(for: .camera)
+        #endif
         app.launch()
         let server = app.textFields["serverAddress"]
         XCTAssertTrue(server.waitForExistence(timeout: 10))
@@ -62,6 +65,31 @@ final class ImageSHUITests: XCTestCase {
         let choosePhotos = app.buttons["Choose from Photos"]
         if !choosePhotos.waitForExistence(timeout: 3), upload.exists { upload.tap() }
         XCTAssertTrue(choosePhotos.waitForExistence(timeout: 5), app.debugDescription)
+        let takePhoto = app.buttons["Take a Photo"]
+        XCTAssertTrue(takePhoto.exists, app.debugDescription)
+        capture(app, name: "Upload sources with camera")
+        #if targetEnvironment(simulator)
+        let cameraPermission = addUIInterruptionMonitor(withDescription: "Camera access") { alert in
+            let deny = alert.buttons["Don’t Allow"].exists ? alert.buttons["Don’t Allow"] : alert.buttons["Don't Allow"]
+            guard deny.exists else { return false }
+            deny.tap()
+            return true
+        }
+        takePhoto.tap()
+        app.tap() // Let XCTest handle the system permission interruption.
+        let settings = app.alerts["Allow Camera Access"]
+        if settings.waitForExistence(timeout: 5) {
+            XCTAssertTrue(settings.buttons["Open Settings"].isEnabled)
+            settings.buttons["Cancel"].tap()
+            takePhoto.tap()
+            XCTAssertTrue(settings.waitForExistence(timeout: 5), app.debugDescription)
+            settings.buttons["Cancel"].tap()
+        } else {
+            XCTAssertTrue(app.staticTexts["The camera is unavailable on this device. Choose an image from Photos or Files instead."]
+                .waitForExistence(timeout: 5), app.debugDescription)
+        }
+        removeUIInterruptionMonitor(cameraPermission)
+        #endif
         choosePhotos.tap()
         let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH[c] 'Photo,'")).firstMatch
         XCTAssertTrue(photo.waitForExistence(timeout: 10), app.debugDescription)
